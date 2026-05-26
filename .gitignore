@@ -1,0 +1,10 @@
+# Visual Studio & .NET build artifacts
+[Bb]in/
+[Oo]bj/
+.vs/
+*.user
+*.suo
+
+# MedReport Privacy: Jangan pernah mengunggah config asli atau laporan
+**/Configuration/config.json
+**/Reports/
