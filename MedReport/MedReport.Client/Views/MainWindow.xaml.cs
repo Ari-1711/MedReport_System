@@ -21,6 +21,7 @@ using System.IO;
 using System;
 using MedReport.Client.Services;
 
+
 namespace MedReport.Client
 {
     public partial class MainWindow : Window
@@ -42,41 +43,35 @@ namespace MedReport.Client
         // -------------------------------------------------------------------------
         private void MuatLogoTersimpan()
         {
-            // Jalur absolut agar aman meski dipanggil dari Shortcut Windows
-            string configPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
-            if (File.Exists(configPath))
+            try
             {
-                try
+                // 1. AMBIL LANGSUNG DARI RAM (ConfigService sudah memuat file saat Startup)
+                // Kita tidak perlu lagi memanggil File.ReadAllText manual di sini.
+                string savedLogoPath = ConfigService.HospitalLogoPath;
+
+                // 2. VALIDASI FISIK FILE
+                if (!string.IsNullOrWhiteSpace(savedLogoPath) && File.Exists(savedLogoPath))
                 {
-                    string jsonString = File.ReadAllText(configPath);
-                    var config = System.Text.Json.Nodes.JsonNode.Parse(jsonString);
-                    string savedLogoPath = config?["HospitalLogoPath"]?.ToString() ?? "";
+                    _hospitalLogoPath = savedLogoPath;
 
-                    // Validasi: Pastikan path ada DAN file gambar fisiknya belum dihapus oleh user
-                    if (!string.IsNullOrWhiteSpace(savedLogoPath) && File.Exists(savedLogoPath))
-                    {
-                        _hospitalLogoPath = savedLogoPath;
+                    // 3. TAMPILKAN KE UI
+                    BitmapImage bitmap = new BitmapImage();
+                    bitmap.BeginInit();
+                    bitmap.UriSource = new Uri(_hospitalLogoPath);
+                    bitmap.DecodePixelWidth = 200;
+                    bitmap.CacheOption = BitmapCacheOption.OnLoad; // Penting: Agar file tidak terkunci
+                    bitmap.EndInit();
 
-                        // Tampilkan ke UI dengan manajemen memori ketat (BitmapCacheOption.OnLoad)
-                        // Ini mencegah file gambar terkunci oleh sistem sehingga bisa dihapus/diganti nanti
-                        BitmapImage bitmap = new BitmapImage();
-                        bitmap.BeginInit();
-                        bitmap.UriSource = new Uri(_hospitalLogoPath);
-                        bitmap.DecodePixelWidth = 200; // Perkecil resolusi di RAM agar aplikasi tidak berat
-                        bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                        bitmap.EndInit();
+                    if (bitmap.CanFreeze) bitmap.Freeze();
 
-                        // Freeze() membuat gambar menjadi Read-Only, menghemat beban CPU & RAM di WPF
-                        if (bitmap.CanFreeze) bitmap.Freeze();
-
-                        HospitalLogo.Source = bitmap;
-                        LogoContainer.Visibility = Visibility.Visible;
-                    }
+                    HospitalLogo.Source = bitmap;
+                    LogoContainer.Visibility = Visibility.Visible;
                 }
-                catch
-                {
-                    // Abaikan jika json rusak, biarkan logo kosong
-                }
+            }
+            catch
+            {
+                // Jika logo gagal dimuat (misal file gambar korup), sembunyikan container
+                LogoContainer.Visibility = Visibility.Collapsed;
             }
         }
 
@@ -163,31 +158,16 @@ namespace MedReport.Client
         // -------------------------------------------------------------------------
         private void BtnSaveTemplate_Click(object sender, RoutedEventArgs e)
         {
-            string configPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
+            string name = FormPasien.TxtRs.Text.Trim();
+            string address = FormPasien.TxtAlamatRs.Text.Trim();
 
-            if (!System.IO.File.Exists(configPath)) return;
-
-            try
+            if (ConfigService.SaveTemplate(name, address, _hospitalLogoPath ?? ""))
             {
-                // 1. Baca isi config saat ini
-                string jsonString = System.IO.File.ReadAllText(configPath);
-                var config = System.Text.Json.Nodes.JsonNode.Parse(jsonString);
-
-                // 2. Tarik data dari elemen anak (FormPasien)
-                config["HospitalName"] = FormPasien.TxtRs.Text.Trim();
-                config["HospitalAddress"] = FormPasien.TxtAlamatRs.Text.Trim();
-
-                // 3. Simpan jalur logo
-                config["HospitalLogoPath"] = _hospitalLogoPath ?? "";
-
-                // 4. Timpa file lama dengan data baru
-                System.IO.File.WriteAllText(configPath, config.ToString());
-
                 MessageBox.Show("Template Rumah Sakit berhasil disimpan!", "Sukses", MessageBoxButton.OK, MessageBoxImage.Information);
             }
-            catch (System.Exception ex)
+            else
             {
-                MessageBox.Show($"Gagal menyimpan template: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show("Gagal menyimpan template.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
