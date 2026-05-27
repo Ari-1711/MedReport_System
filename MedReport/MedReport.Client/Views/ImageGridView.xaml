@@ -1,0 +1,53 @@
+﻿<UserControl x:Class="MedReport.Client.Views.ImageGridView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d">
+
+
+
+
+
+
+    <StackPanel Margin="10">
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+            <Button x:Name="BtnAddImage" Content="+ Add Photo" Click="BtnAddImage_Click" Padding="10,5"/>
+            <!-- Tambahkan status penghitung jumlah gambar yang telah ditambahkan -->
+            <TextBlock x:Name="TxtPhotoCount" Text=" (0/8 Photos)" VerticalAlignment="Center" Margin="5,0,0,0" Foreground="Gray"/>
+        </StackPanel>
+
+        <ItemsControl x:Name="PhotoGallery">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <WrapPanel />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <!-- Container sedikit lebih lebar untuk mengakomodir border -->
+                    <Grid Margin="5" Width="160" Height="130">
+                        <!-- Border diatur dengan margin dalam, tombol "X" menimpa dari luar -->
+                        <!-- Background hitam agar sisa rasio gambar (bila tidak penuh) terlihat kontras -->
+                        <Border BorderBrush="LightGray" BorderThickness="1" CornerRadius="5" Background="Black" Margin="0,10,10,0">
+                            <!-- Stretch='Uniform' memastikan tidak ada pixel yang dipotong! -->
+                            <Image Source="{Binding Thumbnail}" Stretch="Uniform" Margin="2"/>
+                        </Border>
+
+                        <!-- Tombol silang ditempatkan pas di pojok tanpa margin negatif rawan potong -->
+                        <Button Content="X" 
+                                VerticalAlignment="Top" 
+                                HorizontalAlignment="Right"
+                                Background="Red" 
+                                Foreground="White"
+                                Width="24" Height="24"
+                                Click="BtnRemoveImage_Click"
+                                Tag="{Binding}"/>
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </StackPanel>
+
+</UserControl>
