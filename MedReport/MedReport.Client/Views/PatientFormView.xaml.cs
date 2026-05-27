@@ -1,6 +1,10 @@
-﻿using System;
+﻿using MedReport.Client.Models;
+using MedReport.Client.Services;
+using System;
 using System.Collections.Generic;
+using System.Net.Http;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -10,9 +14,6 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
-using System.Text.RegularExpressions;
-using MedReport.Client.Models;
-using System.Net.Http;
 
 namespace MedReport.Client.Views
 {
@@ -34,24 +35,9 @@ namespace MedReport.Client.Views
         // -------------------------------------------------------------------------
         private void MuatTemplateRs()
         {
-            // Menggunakan jalur absolut agar tidak error saat aplikasi dijalankan dari Shortcut Desktop
-            string configPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
-            if (System.IO.File.Exists(configPath))
-            {
-                try
-                {
-                    string jsonString = System.IO.File.ReadAllText(configPath);
-                    var config = System.Text.Json.Nodes.JsonNode.Parse(jsonString);
-
-                    TxtRs.Text = config?["HospitalName"]?.ToString() ?? "";
-                    TxtAlamatRs.Text = config?["HospitalAddress"]?.ToString() ?? "";
-                }
-                catch
-                {
-                    // Sengaja dibiarkan kosong (silent ignore). Jika config rusak, 
-                    // teks akan tetap kosong namun tidak membuat aplikasi crash.
-                }
-            }
+            // Ganti total: Ambil langsung dari RAM lewat ConfigService
+            TxtRs.Text = ConfigService.HospitalName;
+            TxtAlamatRs.Text = ConfigService.HospitalAddress;
         }
 
         // -------------------------------------------------------------------------
@@ -62,55 +48,27 @@ namespace MedReport.Client.Views
         {
             try
             {
-                string configPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
-                if (!System.IO.File.Exists(configPath))
-                {
-                    // Peringatan visual jika teknisi lapangan lupa menyertakan file config
-                    CmbDokter.Items.Add("Error: config.json tidak ditemukan");
-                    CmbDokter.SelectedIndex = 0;
-                    return;
-                }
+                // Ambil URL dan Key langsung dari RAM via ConfigService
+                string apiUrlDokter = ConfigService.GetValue("DoctorApiUrl");
+                string keyNamaDokter = ConfigService.GetMappingValue("DoctorNameKey");
 
-                string jsonString = System.IO.File.ReadAllText(configPath);
-                var config = System.Text.Json.Nodes.JsonNode.Parse(jsonString);
+                if (string.IsNullOrWhiteSpace(apiUrlDokter)) return;
 
-                // Menarik URL dan Key respons API dari config
-                string apiUrlDokter = config?["DoctorApiUrl"]?.ToString();
-                string keyNamaDokter = config?["Mapping"]?["DoctorNameKey"]?.ToString();
-
-                // Validasi: Cegah aplikasi mencari alamat kosong (mencegah crash HttpClient)
-                if (string.IsNullOrWhiteSpace(apiUrlDokter) || string.IsNullOrWhiteSpace(keyNamaDokter))
-                {
-                    CmbDokter.Items.Add("Error: API Dokter di config kosong!");
-                    CmbDokter.SelectedIndex = 0;
-                    return;
-                }
-
-                using HttpClient client = new HttpClient();
-                client.Timeout = TimeSpan.FromSeconds(5); // Batas waktu maksimal antre jaringan (5 detik)
-
+                using HttpClient client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
                 string response = await client.GetStringAsync(apiUrlDokter);
                 var dokterList = System.Text.Json.Nodes.JsonNode.Parse(response)?.AsArray();
 
                 CmbDokter.Items.Clear();
-
                 if (dokterList != null)
                 {
-                    // Masukkan satu per satu nama dokter ke dalam ComboBox (Dropdown UI)
                     foreach (var dok in dokterList)
                     {
                         CmbDokter.Items.Add(dok[keyNamaDokter]?.ToString());
                     }
-                    // Pilih urutan pertama secara default jika data tersedia
                     if (CmbDokter.Items.Count > 0) CmbDokter.SelectedIndex = 0;
                 }
             }
-            catch (Exception)
-            {
-                // Tangkapan layar jika API server dokter terputus/mati
-                CmbDokter.Items.Add("Gagal koneksi ke server Dokter");
-                CmbDokter.SelectedIndex = 0;
-            }
+            catch { /* handle error */ }
         }
 
         // -------------------------------------------------------------------------
