@@ -4,7 +4,7 @@ using System.Text;
 
 namespace MedReport.Client.Models
 {
-    internal class MedicalImageModel
+    public class MedicalImageModel
     {
         // Menyimpan lokasi gambar asli (High Res) untuk Report PDF
         public string OriginalPath { get; set; }
