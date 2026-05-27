@@ -1,0 +1,100 @@
+﻿<UserControl x:Class="MedReport.Client.Views.PatientFormView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:MedReport.Client"
+             mc:Ignorable="d" 
+             d:DesignHeight="550" d:DesignWidth="800">
+    <Grid Margin="10">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Grid.Column="0" Margin="5">
+            <TextBlock Text="ID Pasien:"/>
+            <TextBox x:Name="TxtIdPasien" KeyDown="TxtIdPasien_KeyDown"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="0" Grid.Column="1" Margin="5">
+            <TextBlock Text="Nama Pasien:"/>
+            <TextBox x:Name="TxtNama" 
+                     PreviewTextInput="LetterValidationTextBox" 
+                     DataObject.Pasting="LetterTextBoxPasting" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="0" Grid.Column="2" Margin="5">
+            <TextBlock Text="Tanggal Lahir:"/>
+            <DatePicker x:Name="DpTanggalLahir"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="1" Grid.Column="0" Margin="5">
+            <TextBlock Text="Jenis Kelamin:"/>
+            <ComboBox x:Name="CmbGender" SelectedIndex="0">
+                <ComboBoxItem Content="Laki-laki"/>
+                <ComboBoxItem Content="Perempuan"/>
+            </ComboBox>
+        </StackPanel>
+
+        <StackPanel Grid.Row="1" Grid.Column="1" Margin="5">
+            <TextBlock Text="Dokter Pemeriksa:"/>
+            <ComboBox x:Name="CmbDokter" SelectedIndex="0" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="1" Grid.Column="2" Margin="5">
+            <TextBlock Text="Nama Rumah Sakit:"/>
+            <TextBox x:Name="TxtRs" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Grid.ColumnSpan="3" Margin="5">
+            <TextBlock Text="Alamat Rumah Sakit:"/>
+            <TextBox x:Name="TxtAlamatRs" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="3" Grid.ColumnSpan="3" Margin="5">
+            <TextBlock Text="Keluhan:"/>
+            <TextBox x:Name="TxtKeluhan" MinHeight="60" MaxHeight="120" 
+                     TextWrapping="Wrap" AcceptsReturn="True" 
+                     VerticalScrollBarVisibility="Auto" MaxLength="500"/>
+            <TextBlock Text="{Binding ElementName=TxtKeluhan, Path=Text.Length, StringFormat='{}{0}/500', FallbackValue='0/500'}" 
+                       HorizontalAlignment="Right" Foreground="Gray" FontSize="11" Margin="0,2,5,0"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="4" Grid.ColumnSpan="3" Margin="5">
+            <TextBlock Text="Diagnosis:"/>
+            <TextBox x:Name="TxtDiagnosis" MinHeight="60" MaxHeight="120" 
+                     TextWrapping="Wrap" AcceptsReturn="True" 
+                     VerticalScrollBarVisibility="Auto" MaxLength="500"/>
+            <TextBlock Text="{Binding ElementName=TxtDiagnosis, Path=Text.Length, StringFormat='{}{0}/500', FallbackValue='0/500'}" 
+                       HorizontalAlignment="Right" Foreground="Gray" FontSize="11" Margin="0,2,5,0"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="2" Margin="5">
+            <TextBlock Text="Obat Premedikasi:"/>
+            <TextBox x:Name="TxtObatPremedikasi" MinHeight="40" MaxHeight="100" 
+                     TextWrapping="Wrap" AcceptsReturn="True" 
+                     VerticalScrollBarVisibility="Auto" MaxLength="300"/>
+            <TextBlock Text="{Binding ElementName=TxtObatPremedikasi, Path=Text.Length, StringFormat='{}{0}/300', FallbackValue='0/300'}" 
+                       HorizontalAlignment="Right" Foreground="Gray" FontSize="11" Margin="0,2,5,0"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="5" Grid.Column="2" Margin="5">
+            <TextBlock Text="Alat:"/>
+            <TextBox x:Name="TxtAlat" MinHeight="40" MaxHeight="100"
+                     TextWrapping="Wrap" AcceptsReturn="True"
+                     MaxLength="300" VerticalScrollBarVisibility="Auto"/>
+            <TextBlock Text="{Binding ElementName=TxtAlat, Path=Text.Length, StringFormat='{}{0}/300', FallbackValue='0/300'}" 
+                       HorizontalAlignment="Right" Foreground="Gray" FontSize="11" Margin="0,2,5,0"/>
+        </StackPanel>
+    </Grid>
+</UserControl>
