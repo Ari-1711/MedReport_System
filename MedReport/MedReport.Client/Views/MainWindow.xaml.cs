@@ -199,7 +199,7 @@ namespace MedReport.Client
             // --- TAHAP 1: VALIDASI MEDIS AWAL (Idiot-Proof) ---
             // Cegah pembuatan laporan jika data inti kosong. Laporan medis tanpa ID/Nama = Malapraktik
             var dataPasien = FormPasien.GetPatientData();
-            if (string.IsNullOrWhiteSpace(dataPasien.Nama) || string.IsNullOrWhiteSpace(dataPasien.IdPasien))
+            if (string.IsNullOrWhiteSpace(dataPasien.Patient.Nama) || string.IsNullOrWhiteSpace(dataPasien.Patient.IdPasien))
             {
                 MessageBox.Show("Nama Pasien dan ID Pasien wajib diisi sebelum membuat laporan.", "Validasi Gagal", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;

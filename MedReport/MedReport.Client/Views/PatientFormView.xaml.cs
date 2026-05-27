@@ -202,18 +202,21 @@ namespace MedReport.Client.Views
         {
             return new ReportDataModel
             {
-                IdPasien = TxtIdPasien.Text?.Trim(),
-                Nama = TxtNama.Text?.Trim(),
+                // 1. Mengisi objek Patient (Komposisi)
+                Patient = new PatientApiModel
+                {
+                    IdPasien = TxtIdPasien.Text?.Trim(),
+                    Nama = TxtNama.Text?.Trim(),
+
+
+                    TanggalLahir = DpTanggalLahir.SelectedDate,
+
+                    // Ekstraksi nilai teks dari elemen dropdown (ComboBox)
+                    Gender = (CmbGender.SelectedItem as ComboBoxItem)?.Content?.ToString()
+                },
+
                 Hospital = TxtRs.Text?.Trim(),
                 Address = TxtAlamatRs.Text?.Trim(),
-
-                // Mengubah tipe mesin (DateTime) menjadi teks rapi ala Indonesia (misal: "14 Mei 2026")
-                TanggalLahir = DpTanggalLahir.SelectedDate.HasValue
-                               ? DpTanggalLahir.SelectedDate.Value.ToString("dd MMMM yyyy", new System.Globalization.CultureInfo("id-ID"))
-                               : "",
-
-                // Ekstraksi nilai teks dari elemen dropdown (ComboBox)
-                Gender = (CmbGender.SelectedItem as ComboBoxItem)?.Content?.ToString(),
                 Dokter = CmbDokter.SelectedItem?.ToString(), // Langsung baca string karena item dari API
 
                 // Input catatan klinis panjang

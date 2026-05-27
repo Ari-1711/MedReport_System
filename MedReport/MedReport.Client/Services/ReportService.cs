@@ -104,10 +104,10 @@ namespace MedReport.Client.Services
                                 }
 
                                 // Pengisian Sel Tabel (Menggunakan t.Span untuk menggabungkan teks Bold dan Normal dalam 1 baris)
-                                table.Cell().Element(CellStyle).Text(t => { t.Span("ID Pasien: ").SemiBold(); t.Span(dataPasien.IdPasien ?? "-"); });
-                                table.Cell().Element(CellStyle).Text(t => { t.Span("Nama Pasien: ").SemiBold(); t.Span(dataPasien.Nama ?? "-"); });
-                                table.Cell().Element(CellStyle).Text(t => { t.Span("Tgl Lahir: ").SemiBold(); t.Span(dataPasien.TanggalLahir ?? "-"); });
-                                table.Cell().Element(CellStyle).Text(t => { t.Span("Gender: ").SemiBold(); t.Span(dataPasien.Gender ?? "-"); });
+                                table.Cell().Element(CellStyle).Text(t => { t.Span("ID Pasien: ").SemiBold(); t.Span(dataPasien.Patient.IdPasien ?? "-"); });
+                                table.Cell().Element(CellStyle).Text(t => { t.Span("Nama Pasien: ").SemiBold(); t.Span(dataPasien.Patient.Nama ?? "-"); });
+                                table.Cell().Element(CellStyle).Text(t => { t.Span("Tgl Lahir: ").SemiBold(); t.Span(dataPasien.Patient.TanggalLahir?.ToString("dd/MM/yyyy") ?? "-"); });
+                                table.Cell().Element(CellStyle).Text(t => { t.Span("Gender: ").SemiBold(); t.Span(dataPasien.Patient.Gender ?? "-"); });
 
                                 table.Cell().Element(CellStyle).Column(colBox =>
                                 {
