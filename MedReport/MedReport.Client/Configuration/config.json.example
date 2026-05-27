@@ -1,0 +1,13 @@
+{
+  "HospitalName": "",
+  "HospitalAddress": "",
+  "HospitalLogoPath": "",
+  "ApiUrl": "http://localhost:3000/pasien/",
+  "DoctorApiUrl": "http://localhost:3000/dokter",
+  "Mapping": {
+    "NamaKey": "nama_lengkap",
+    "TglLahirKey": "tgl_lahir",
+    "GenderKey": "jenis_kelamin",
+    "DoctorNameKey": "nama"
+  }
+}
