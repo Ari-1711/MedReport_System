@@ -1,9 +1,10 @@
-﻿using QuestPDF.Infrastructure;
+﻿using MedReport.Client.Services;
+using QuestPDF.Infrastructure;
 using System.Configuration;
 using System.Data;
 using System.Windows;
 using System.Windows.Threading;
-
+using MedReport.Client.Services;
 namespace MedReport.Client
 {
     public partial class App : Application
@@ -11,6 +12,8 @@ namespace MedReport.Client
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
+
+            ConfigService.LoadConfig();
 
             // Pengaturan lisensi QuestPDF bawaan Anda (Sangat Penting)
             QuestPDF.Settings.License = LicenseType.Community;
