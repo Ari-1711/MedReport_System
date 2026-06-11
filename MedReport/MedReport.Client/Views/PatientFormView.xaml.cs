@@ -56,10 +56,21 @@ namespace MedReport.Client.Views
         {
             try
             {
+                // Ambil URL dokter
                 string apiUrlDokter = ConfigService.GetValue("DoctorApiUrl");
-                string keyNamaDokter = ConfigService.GetMappingValue("DoctorNameKey");
 
-                if (string.IsNullOrWhiteSpace(apiUrlDokter)) return;
+                // SOLUSI: Jika config belum siap/kosong, gunakan URL cadangan (localhost)
+                if (string.IsNullOrWhiteSpace(apiUrlDokter))
+                {
+                    apiUrlDokter = "http://localhost:3000/dokter";
+                }
+
+                string keyNamaDokter = ConfigService.GetMappingValue("DoctorNameKey");
+                // Jika mapping key kosong, gunakan default "nama"
+                if (string.IsNullOrWhiteSpace(keyNamaDokter))
+                {
+                    keyNamaDokter = "nama";
+                }
 
                 using HttpClient client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
                 string response = await client.GetStringAsync(apiUrlDokter);
@@ -75,7 +86,10 @@ namespace MedReport.Client.Views
                     if (CmbDokter.Items.Count > 0) CmbDokter.SelectedIndex = 0;
                 }
             }
-            catch { /* handle error */ }
+            catch
+            {
+                // Jangan biarkan aplikasi crash jika server API dokter mati
+            }
         }
 
         // -------------------------------------------------------------------------
