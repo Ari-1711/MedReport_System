@@ -213,7 +213,7 @@ namespace MedReport.Client.Services
                                     }
                                     else
                                     {
-                                        sigCol.Item().PaddingVertical(15).AlignCenter().Text("(Belum Tanda Tangan)").FontSize(9).Italic();
+                                        sigCol.Item().Height(60);
                                     }
 
                                     sigCol.Item().AlignCenter().Text($"({dataPasien.Dokter ?? "Nama Dokter"})").SemiBold().FontSize(10);
