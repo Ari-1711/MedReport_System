@@ -29,8 +29,6 @@ namespace MedReport.Client.Views
 
         // -------------------------------------------------------------------------
         // FUNGSI RESET GLOBAL: Pembersihan Pasca-Cetak
-        // Dipanggil dari MainWindow HANYA setelah laporan PDF sukses dibuat.
-        // Membersihkan seluruh catatan medis dan kanvas untuk pasien berikutnya.
         // -------------------------------------------------------------------------
         public void ResetTandaTangan()
         {
@@ -43,8 +41,6 @@ namespace MedReport.Client.Views
 
         // -------------------------------------------------------------------------
         // FUNGSI RESET LOKAL: Tombol UI "Clear"
-        // Hanya menghapus coretan tanda tangan jika dokter salah tanda tangan,
-        // tanpa menghapus teks catatan medis yang sudah diketik panjang lebar.
         // -------------------------------------------------------------------------
         private void BtnClearSignature_Click(object sender, RoutedEventArgs e)
         {
@@ -53,14 +49,9 @@ namespace MedReport.Client.Views
 
         // -------------------------------------------------------------------------
         // FUNGSI EKSTRAKSI DATA: Menarik teks dari layar untuk QuestPDF
-        // Menggunakan Tuple (string, string, string, string) agar lebih ringkas 
-        // tanpa harus membuat class Model terpisah khusus untuk 4 variabel ini.
         // -------------------------------------------------------------------------
         public (string Anamnesa, string Hasil, string Kesimpulan, string Saran) GetProcedureText()
         {
-            // .Trim() SANGAT KRUSIAL DI SINI. 
-            // Jika dokter tidak sengaja menekan 'Spasi' atau 'Enter' berlebih di akhir kalimat,
-            // .Trim() akan memotongnya sehingga layout PDF (QuestPDF) tidak berantakan/tergeser.
             return (
                 TxtAnamnesa.Text?.Trim() ?? string.Empty,
                 TxtHasil.Text?.Trim() ?? string.Empty,
@@ -70,44 +61,55 @@ namespace MedReport.Client.Views
         }
 
         // -------------------------------------------------------------------------
-        // CORE RENDER ENGINE: Mengubah coretan vektor (InkCanvas) menjadi gambar biner (PNG)
+        // CORE RENDER ENGINE: Dioptimalkan dengan High-DPI untuk Ketajaman Cetak
         // -------------------------------------------------------------------------
         public byte[]? GetSignatureImage()
         {
-            // Validasi Lapis 1: Jika kanvas kosong, kembalikan null. 
-            // Jangan buang memori untuk merender gambar putih kosong.
-            if (Sigpad.Strokes.Count == 0) return null;
+            // Fallback Lapis 1: Jika dokter tidak tanda tangan (memilih tanda tangan basah),
+            // kembalikan null secara aman agar PDF tahu harus mengosongkan space.
+            if (Sigpad == null || Sigpad.Strokes.Count == 0) return null;
 
             // MENGHINDARI CRASH DIMENSI (DPI SCALING)
-            // Windows UI sering menggunakan skala desimal (misal 150.5 px) pada layar beresolusi tinggi.
-            // RenderTargetBitmap hanya menerima angka bulat (Integer). 
-            // Math.Ceiling membulatkan ke atas agar gambar tidak terpotong atau memicu Exception.
-            int width = (int)Math.Ceiling(Sigpad.ActualWidth);
-            int height = (int)Math.Ceiling(Sigpad.ActualHeight);
+            double actualWidth = Sigpad.ActualWidth;
+            double actualHeight = Sigpad.ActualHeight;
 
-            // Validasi Lapis 2: Mencegah ArgumentException.
-            // Jika fungsi ini terpicu sebelum UI WPF selesai merender kanvas di layar (width/height = 0),
-            // batalkan proses agar aplikasi tidak force close.
-            if (width <= 0 || height <= 0) return null;
+            // Fallback Lapis 2: Mencegah ArgumentException jika UI belum selesai me-render komponen.
+            if (actualWidth <= 0 || actualHeight <= 0) return null;
 
-            // PROSES RENDER BITMAP
-            // Resolusi default adalah 96 DPI (Standard Monitor).
-            // Catatan: Jika saat di-print di kertas HVS hasilnya pecah/buram, 
-            // naikkan nilai 96d, 96d ini menjadi 144d, 144d atau 192d, 192d.
-            RenderTargetBitmap rtb = new RenderTargetBitmap(width, height, 96d, 96d, PixelFormats.Default);
-            rtb.Render(Sigpad);
-
-            // ENCODING KE PNG (Mendukung transparansi latar belakang / Alpha Channel)
-            PngBitmapEncoder encoder = new PngBitmapEncoder();
-            encoder.Frames.Add(BitmapFrame.Create(rtb));
-
-            // MANAJEMEN MEMORI KETAT (MemoryStream)
-            // Menggunakan blok 'using' agar aliran memori (MemoryStream) langsung dihancurkan 
-            // dan dikembalikan ke RAM PC sesaat setelah byte array berhasil diekstrak.
-            using (System.IO.MemoryStream ms = new System.IO.MemoryStream())
+            try
             {
-                encoder.Save(ms);
-                return ms.ToArray(); // Kirim biner mentah ke pembuat PDF
+                // IMPLEMENTASI OPTIMASI 3: HIGH-DPI SCALING FACTOR (3.0x)
+                // Kita kalikan resolusi render sebanyak 3x lipat agar garis tanda tangan tidak blur saat masuk PDF.
+                double scaleFactor = 3.0;
+
+                int renderWidth = (int)Math.Ceiling(actualWidth * scaleFactor);
+                int renderHeight = (int)Math.Ceiling(actualHeight * scaleFactor);
+
+                // Gunakan koordinat DPI yang dinaikkan (96 * 3 = 288 DPI) untuk kualitas cetak printer laser.
+                RenderTargetBitmap rtb = new RenderTargetBitmap(
+                    renderWidth,
+                    renderHeight,
+                    96d * scaleFactor,
+                    96d * scaleFactor,
+                    PixelFormats.Default);
+
+                rtb.Render(Sigpad);
+
+                // ENCODING KE PNG (Mendukung transparansi latar belakang)
+                PngBitmapEncoder encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create(rtb));
+
+                // MANAJEMEN MEMORI KETAT (MemoryStream)
+                using (System.IO.MemoryStream ms = new System.IO.MemoryStream())
+                {
+                    encoder.Save(ms);
+                    return ms.ToArray(); // Kirim biner tajam ke pembuat PDF
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Gagal merender tanda tangan: {ex.Message}");
+                return null;
             }
         }
     }
