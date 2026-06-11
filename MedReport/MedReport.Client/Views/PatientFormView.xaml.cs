@@ -19,6 +19,15 @@ namespace MedReport.Client.Views
 {
     public partial class PatientFormView : UserControl
     {
+        // =========================================================================
+        // IMPLEMENTASI OPTIMASI 2: INSTANCE TETAP & MEKANISME GEMBOK
+        // =========================================================================
+        // 1. Instansiasi sekali saja di tingkat kelas agar hemat RAM (Singleton-like)
+        private readonly HospitalApiService _apiService = new HospitalApiService();
+
+        // 2. Variabel gembok (Flag) untuk mencegah suster melakukan spam Enter
+        private bool _isSearching = false;
+
         // -------------------------------------------------------------------------
         // CONSTRUCTOR: Dipanggil pertama kali saat tampilan (View) ini dimuat
         // -------------------------------------------------------------------------
@@ -35,7 +44,6 @@ namespace MedReport.Client.Views
         // -------------------------------------------------------------------------
         private void MuatTemplateRs()
         {
-            // Ganti total: Ambil langsung dari RAM lewat ConfigService
             TxtRs.Text = ConfigService.HospitalName;
             TxtAlamatRs.Text = ConfigService.HospitalAddress;
         }
@@ -48,7 +56,6 @@ namespace MedReport.Client.Views
         {
             try
             {
-                // Ambil URL dan Key langsung dari RAM via ConfigService
                 string apiUrlDokter = ConfigService.GetValue("DoctorApiUrl");
                 string keyNamaDokter = ConfigService.GetMappingValue("DoctorNameKey");
 
@@ -73,18 +80,15 @@ namespace MedReport.Client.Views
 
         // -------------------------------------------------------------------------
         // FUNGSI VALIDASI UI: Mencegah pengguna mengetik angka (0-9) di keyboard
-        // Dipakai untuk kolom teks yang murni hanya boleh berisi huruf (seperti Nama)
         // -------------------------------------------------------------------------
         private void LetterValidationTextBox(object sender, TextCompositionEventArgs e)
         {
             Regex regex = new Regex("[0-9]+");
-            // e.Handled = true berarti input ditolak. Jika yang diketik adalah angka, tolak.
             e.Handled = regex.IsMatch(e.Text);
         }
 
         // -------------------------------------------------------------------------
-        // FUNGSI VALIDASI UI: Mencegah pengguna melakukan Copy-Paste (Ctrl+V) yang memuat angka
-        // Menutup celah bypass dari fungsi LetterValidationTextBox
+        // FUNGSI VALIDASI UI: Mencegah pengguna melakukan Copy-Paste (Ctrl+V) memuat angka
         // -------------------------------------------------------------------------
         private void LetterTextBoxPasting(object sender, DataObjectPastingEventArgs e)
         {
@@ -95,66 +99,77 @@ namespace MedReport.Client.Views
 
                 if (regex.IsMatch(text))
                 {
-                    e.CancelCommand(); // Batalkan aksi paste jika terdeteksi angka
+                    e.CancelCommand();
                 }
             }
             else
             {
-                e.CancelCommand(); // Batalkan jika yang di-paste bukan tipe teks (misal: gambar)
+                e.CancelCommand();
             }
         }
 
         // -------------------------------------------------------------------------
-        // EVENT LISTENER: Berjalan saat pengguna menekan tombol pada keyboard di kolom ID Pasien
+        // EVENT LISTENER: Dioptimalkan dengan Async Lock & Visual Feedback
         // -------------------------------------------------------------------------
         private async void TxtIdPasien_KeyDown(object sender, KeyEventArgs e)
         {
-            // Logika hanya berjalan ketika suster menekan tombol 'Enter'
             if (e.Key == Key.Enter)
             {
-                string idInput = TxtIdPasien.Text.Trim(); // .Trim() membersihkan spasi kiri-kanan
+                // JIKA GEMBOK AKTIF: Langsung batalkan proses (abaikan spam Enter)
+                if (_isSearching) return;
+
+                string idInput = TxtIdPasien.Text.Trim();
                 if (string.IsNullOrEmpty(idInput)) return;
 
-                // Memanggil Service jaringan (Sang Kurir) untuk mencari data ke API
-                var apiService = new MedReport.Client.Services.HospitalApiService();
-                var hasil = await apiService.CariPasienAsync(idInput);
-
-                if (hasil != null)
+                try
                 {
-                    // Pasien ditemukan, isi otomatis form UI
-                    TxtNama.Text = hasil.Nama;
+                    // PASANG GEMBOK & MATIKAN INPUT (Visual Feedback agar suster tahu aplikasi sedang bekerja)
+                    _isSearching = true;
+                    TxtIdPasien.IsEnabled = false;
 
-                    // Oper tipe data Type-Safe (DateTime?) secara langsung ke DatePicker UI
-                    DpTanggalLahir.SelectedDate = hasil.TanggalLahir;
+                    // Gunakan _apiService tingkat kelas yang hemat memori
+                    var hasil = await _apiService.CariPasienAsync(idInput);
 
-                    // Logika pencarian nilai ComboBox untuk Jenis Kelamin
-                    if (!string.IsNullOrEmpty(hasil.Gender))
+                    if (hasil != null)
                     {
-                        foreach (ComboBoxItem item in CmbGender.Items)
+                        TxtNama.Text = hasil.Nama;
+                        DpTanggalLahir.SelectedDate = hasil.TanggalLahir;
+
+                        if (!string.IsNullOrEmpty(hasil.Gender))
                         {
-                            if (item.Content.ToString() == hasil.Gender)
+                            foreach (ComboBoxItem item in CmbGender.Items)
                             {
-                                CmbGender.SelectedItem = item;
-                                break;
+                                if (item.Content.ToString() == hasil.Gender)
+                                {
+                                    CmbGender.SelectedItem = item;
+                                    break;
+                                }
                             }
                         }
                     }
+                    else
+                    {
+                        MessageBox.Show("Pasien tidak ditemukan.", "Peringatan", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        TxtNama.Clear();
+                        DpTanggalLahir.SelectedDate = null;
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    // Jika server membalas 404 (Pasien Tidak Ditemukan)
-                    MessageBox.Show("Pasien tidak ditemukan.", "Peringatan", MessageBoxButton.OK, MessageBoxImage.Warning);
-
-                    // Bersihkan sisa data sebelumnya agar tidak salah input
-                    TxtNama.Clear();
-                    DpTanggalLahir.SelectedDate = null;
+                    MessageBox.Show($"Terjadi gangguan koneksi ke server: {ex.Message}", "Gangguan Jaringan", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+                finally
+                {
+                    // LEPAS GEMBOK & BUKA KEMBALI INPUT (Selalu dieksekusi baik berhasil maupun error)
+                    _isSearching = false;
+                    TxtIdPasien.IsEnabled = true;
+                    TxtIdPasien.Focus(); // Kembalikan fokus kursor agar suster nyaman
                 }
             }
         }
 
         // -------------------------------------------------------------------------
         // FUNGSI PENGUMPUL DATA: Dipanggil oleh MainWindow sebelum membuat PDF
-        // Bertugas membungkus semua inputan layar menjadi satu objek Type-Safe (ReportDataModel)
         // -------------------------------------------------------------------------
         public ReportDataModel GetPatientData()
         {
@@ -165,16 +180,13 @@ namespace MedReport.Client.Views
                 Hospital = TxtRs.Text?.Trim(),
                 Address = TxtAlamatRs.Text?.Trim(),
 
-                // Mengubah tipe mesin (DateTime) menjadi teks rapi ala Indonesia (misal: "14 Mei 2026")
                 TanggalLahir = DpTanggalLahir.SelectedDate.HasValue
                                ? DpTanggalLahir.SelectedDate.Value.ToString("dd MMMM yyyy", new System.Globalization.CultureInfo("id-ID"))
                                : "",
 
-                // Ekstraksi nilai teks dari elemen dropdown (ComboBox)
                 Gender = (CmbGender.SelectedItem as ComboBoxItem)?.Content?.ToString(),
-                Dokter = CmbDokter.SelectedItem?.ToString(), // Langsung baca string karena item dari API
+                Dokter = CmbDokter.SelectedItem?.ToString(),
 
-                // Input catatan klinis panjang
                 Keluhan = TxtKeluhan.Text?.Trim(),
                 Diagnosis = TxtDiagnosis.Text?.Trim(),
                 ObatPremedikasi = TxtObatPremedikasi.Text?.Trim(),
@@ -183,8 +195,7 @@ namespace MedReport.Client.Views
         }
 
         // -------------------------------------------------------------------------
-        // FUNGSI RESET: Membersihkan area layar klinis (Mencegah kontaminasi data pasien)
-        // Dipanggil oleh MainWindow secara otomatis HANYA SETELAH laporan PDF berhasil dicetak
+        // FUNGSI RESET: Membersihkan area layar klinis
         // -------------------------------------------------------------------------
         public void ResetFormPasien()
         {
@@ -197,7 +208,6 @@ namespace MedReport.Client.Views
             TxtDiagnosis.Clear();
             TxtObatPremedikasi.Clear();
             TxtAlat.Clear();
-            // Catatan: TxtRs dan TxtAlamatRs sengaja tidak di-clear karena itu identitas tetap RS
         }
     }
 }
