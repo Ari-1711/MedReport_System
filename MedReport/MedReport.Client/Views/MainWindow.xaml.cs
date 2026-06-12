@@ -1,26 +1,11 @@
 ﻿using Microsoft.Win32;
-using System.Runtime.CompilerServices;
-using System.Security.Cryptography.Xml;
-using System.Text;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
-using QuestPDF.Fluent;
-using QuestPDF.Helpers;
-using QuestPDF.Infrastructure;
-using System.Threading.Tasks;
-using System.Linq;
+using System;
 using System.Collections.Generic;
 using System.IO;
-using System;
+using System.Linq;
+using System.Windows;
+using System.Windows.Media.Imaging;
 using MedReport.Client.Services;
-
 
 namespace MedReport.Client
 {
@@ -45,21 +30,18 @@ namespace MedReport.Client
         {
             try
             {
-                // 1. AMBIL LANGSUNG DARI RAM (ConfigService sudah memuat file saat Startup)
-                // Kita tidak perlu lagi memanggil File.ReadAllText manual di sini.
                 string savedLogoPath = ConfigService.HospitalLogoPath;
 
-                // 2. VALIDASI FISIK FILE
                 if (!string.IsNullOrWhiteSpace(savedLogoPath) && File.Exists(savedLogoPath))
                 {
                     _hospitalLogoPath = savedLogoPath;
 
-                    // 3. TAMPILKAN KE UI
+                    // TAMPILKAN KE UI DENGAN PROSES PENYALINAN RAM YANG TEPAT (ANTI-LOCK)
                     BitmapImage bitmap = new BitmapImage();
                     bitmap.BeginInit();
                     bitmap.UriSource = new Uri(_hospitalLogoPath);
                     bitmap.DecodePixelWidth = 200;
-                    bitmap.CacheOption = BitmapCacheOption.OnLoad; // Penting: Agar file tidak terkunci
+                    bitmap.CacheOption = BitmapCacheOption.OnLoad; // Melepas file fisik setelah dibaca
                     bitmap.EndInit();
 
                     if (bitmap.CanFreeze) bitmap.Freeze();
@@ -70,7 +52,6 @@ namespace MedReport.Client
             }
             catch
             {
-                // Jika logo gagal dimuat (misal file gambar korup), sembunyikan container
                 LogoContainer.Visibility = Visibility.Collapsed;
             }
         }
@@ -80,13 +61,13 @@ namespace MedReport.Client
         // -------------------------------------------------------------------------
         private void tbnmedicalapp_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
-            MessageBoxResult userResponse = MessageBox.Show("Apakah Anda yakin ingin keluar?",
-                 "Konfirmasi",
-                 MessageBoxButton.YesNo,
-                 MessageBoxImage.Warning,
-                 MessageBoxResult.No);
+            MessageBoxResult userResponse = MessageBox.Show(
+                "Apakah Anda yakin ingin keluar?",
+                "Konfirmasi",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning,
+                MessageBoxResult.No);
 
-            // Jika suster tidak sengaja menekan tombol silang (X), batalkan proses penutupan (Cancel = true)
             if (userResponse == MessageBoxResult.No)
             {
                 e.Cancel = true;
@@ -105,7 +86,6 @@ namespace MedReport.Client
             {
                 _hospitalLogoPath = openFileDialog.FileName;
 
-                // Proses render ulang logo baru ke layar dengan optimasi memori yang sama
                 BitmapImage bitmap = new BitmapImage();
                 bitmap.BeginInit();
                 bitmap.UriSource = new Uri(_hospitalLogoPath);
@@ -113,10 +93,7 @@ namespace MedReport.Client
                 bitmap.CacheOption = BitmapCacheOption.OnLoad;
                 bitmap.EndInit();
 
-                if (bitmap.CanFreeze)
-                {
-                    bitmap.Freeze();
-                }
+                if (bitmap.CanFreeze) bitmap.Freeze();
 
                 HospitalLogo.Source = bitmap;
                 LogoContainer.Visibility = Visibility.Visible;
@@ -135,7 +112,7 @@ namespace MedReport.Client
 
         // -------------------------------------------------------------------------
         // HELPER UTILITY: Mengubah file gambar di Harddisk menjadi kode Biner (byte[])
-        // Jauh lebih aman memproses byte[] langsung dari disk daripada mengekstraknya dari UI (Image Control)
+        // Menggunakan blok 'using' secara implisit untuk menjamin pelepasan handle file
         // -------------------------------------------------------------------------
         private byte[]? GetBytesFromFile(string filePath)
         {
@@ -144,6 +121,7 @@ namespace MedReport.Client
 
             try
             {
+                // File.ReadAllBytes secara internal mengelola open, read, dan close stream secara aman
                 return File.ReadAllBytes(filePath);
             }
             catch
@@ -154,7 +132,6 @@ namespace MedReport.Client
 
         // -------------------------------------------------------------------------
         // EVENT LISTENER: Menyimpan nama, alamat, dan logo RS ke config.json
-        // Ini adalah fitur "Template" agar perawat tidak perlu mengetik ulang nama RS setiap hari
         // -------------------------------------------------------------------------
         private void BtnSaveTemplate_Click(object sender, RoutedEventArgs e)
         {
@@ -172,20 +149,18 @@ namespace MedReport.Client
         }
 
         // -------------------------------------------------------------------------
-        // CORE ENGINE: Mengeksekusi pembuatan laporan PDF (Proses Paling Krusial)
+        // CORE ENGINE: Mengeksekusi pembuatan laporan PDFSecara Asinkronus
         // -------------------------------------------------------------------------
         private async void BtnGenerate_Click(object sender, RoutedEventArgs e)
         {
-            // --- TAHAP 1: VALIDASI MEDIS AWAL (Idiot-Proof) ---
-            // Cegah pembuatan laporan jika data inti kosong. Laporan medis tanpa ID/Nama = Malapraktik
+            // --- TAHAP 1: VALIDASI MEDIS AWAL ---
             var dataPasien = FormPasien.GetPatientData();
             if (string.IsNullOrWhiteSpace(dataPasien.Nama) || string.IsNullOrWhiteSpace(dataPasien.IdPasien))
             {
-                MessageBox.Show("Nama Pasien dan ID Pasien wajib diisi sebelum membuat laporan.", "Validasi Gagal", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("Nama Pasien and ID Pasien wajib diisi sebelum membuat laporan.", "Validasi Gagal", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
-            // Validasi keberadaan foto endoskopi
             if (GaleriFoto.SelectedPhotos == null || GaleriFoto.SelectedPhotos.Count == 0)
             {
                 MessageBox.Show("Harap pilih minimal 1 foto endoskopi sebelum membuat laporan.", "Validasi Gagal", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -193,52 +168,41 @@ namespace MedReport.Client
             }
 
             // --- TAHAP 2: KUNCI UI ---
-            // Munculkan indikator loading dan matikan tombol agar user tidak klik 2x (mencegah crash)
             PgbLoading.Visibility = Visibility.Visible;
             BtnGenerate.IsEnabled = false;
-
-            // Deklarasi array biner di luar blok try agar memori bisa dihancurkan di blok finally
-            List<byte[]?> kumpulanFotoBytes = null;
-            byte[]? logoBytes = null;
-            byte[]? gambarTandaTanganBytes = null;
 
             try
             {
                 // --- TAHAP 3: EKSTRAKSI DATA UI (Wajib dilakukan di UI Thread) ---
-                gambarTandaTanganBytes = TandaTangan.GetSignatureImage();
-                logoBytes = GetBytesFromFile(_hospitalLogoPath);
+                byte[]? gambarTandaTanganBytes = TandaTangan.GetSignatureImage();
+                byte[]? logoBytes = GetBytesFromFile(_hospitalLogoPath);
 
-                // MASUKKAN RELASI GAMBAR: Ambil list data model murni dari wrapper UI galeri ke dataPasien
+                // Sinkronisasi data model murni dari wrapper UI galeri ke dalam manifes laporan
                 dataPasien.FotoEndoskopi = GaleriFoto.SelectedPhotos.Select(p => p.DataModel).ToList();
 
-                // --- TAHAP 4: PROSES BERAT DI BACKGROUND THREAD ---
+                // --- TAHAP 4: EKSEKUSI PIPELINE GENERATOR (NON-BLOCKING ASYNC) ---
+                // Menjalankan tugas pembuatan PDF asinkronus tanpa membuat UI hang mendadak
                 await ReportService.GenerateAsync(dataPasien, gambarTandaTanganBytes, logoBytes);
+
+                // Notifikasi sukses
+                MessageBox.Show("Laporan PDF berhasil dibuat!", "Sukses", MessageBoxButton.OK, MessageBoxImage.Information);
+
+                // Bersihkan form rekam medis secara sadar demi keamanan data pasien berikutnya
+                FormPasien.ResetFormPasien();
+                GaleriFoto.ResetGaleri();
+                TandaTangan.ResetTandaTangan();
             }
             catch (Exception ex)
             {
-                // Tangkapan error global jika rendering PDF gagal atau file sedang dibuka di aplikasi lain
                 MessageBox.Show($"Gagal memproses laporan: {ex.Message}", "Kesalahan Sistem Laporan", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             finally
             {
-                // --- TAHAP 5: KEMBALIKAN STATE UI ---
+                // --- TAHAP 5: KEMBALIKAN STATE UI & PELEPASAN REFERENSI ---
+                // GC .NET akan membersihkan alokasi memori secara otomatis dan cerdas saat 
+                // variabel lokal di dalam metode ini keluar dari ruang lingkup cakupan (out of scope).
                 PgbLoading.Visibility = Visibility.Collapsed;
                 BtnGenerate.IsEnabled = true;
-
-                // --- TAHAP 6: PEMBERSIHAN MEMORI EKSTREM ---
-                // Langkah vital: Memutus referensi memori dari file gambar resolusi tinggi
-                // Jika ini dilewati, aplikasi akan memakan RAM hingga crash setelah membuat puluhan laporan
-                if (kumpulanFotoBytes != null)
-                {
-                    kumpulanFotoBytes.Clear();
-                    kumpulanFotoBytes = null;
-                }
-                logoBytes = null;
-                gambarTandaTanganBytes = null;
-
-                // Paksa Garbage Collector (Sistem Pembuang Sampah Windows) untuk segera membersihkan RAM
-                GC.Collect();
-                GC.WaitForPendingFinalizers();
             }
         }
     }
