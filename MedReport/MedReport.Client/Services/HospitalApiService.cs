@@ -8,12 +8,11 @@ namespace MedReport.Client.Services
 {
     public class HospitalApiService
     {
-        private readonly HttpClient _client;
-
-        public HospitalApiService()
+        // Berbagi satu instans HttpClient statis tunggal untuk mencegah Socket Exhaustion
+        private static readonly HttpClient _client = new HttpClient
         {
-            _client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-        }
+            Timeout = TimeSpan.FromSeconds(5)
+        };
 
         public async Task<PatientApiModel?> CariPasienAsync(string idPasienInput)
         {
@@ -23,30 +22,48 @@ namespace MedReport.Client.Services
                 if (string.IsNullOrEmpty(apiUrl)) return null;
 
                 HttpResponseMessage response = await _client.GetAsync($"{apiUrl}{idPasienInput}");
-                if (!response.IsSuccessStatusCode) return null;
 
-                var data = JsonNode.Parse(await response.Content.ReadAsStringAsync());
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new HttpRequestException($"Server Rumah Sakit merespons dengan kode status: {(int)response.StatusCode} ({response.ReasonPhrase})");
+                }
 
-                // AMBIL DATA DOKTER/TENANT DARI CONFIG JIKA ADA (Mendukung Multi-tenancy)
+                string responseBody = await response.Content.ReadAsStringAsync();
+                var data = JsonNode.Parse(responseBody);
+
+                if (data == null) return null;
+
                 string currentHospitalId = ConfigService.HospitalLogoPath ?? "DEFAULT_RS";
+
+                string namaKey = ConfigService.GetMappingValue("NamaKey");
+                string genderKey = ConfigService.GetMappingValue("GenderKey");
+                string tglLahirKey = ConfigService.GetMappingValue("TglLahirKey");
 
                 return new PatientApiModel
                 {
-                    HospitalId = currentHospitalId, // Isi pengunci Tenant ID
+                    HospitalId = currentHospitalId,
                     IdPasien = idPasienInput,
-                    Nama = data?[ConfigService.GetMappingValue("NamaKey")]?.ToString() ?? "",
-
-                    // SOLUSI 1: Petakan ke RawGender agar logika normalisasi Enum di Model bekerja
-                    RawGender = data?[ConfigService.GetMappingValue("GenderKey")]?.ToString() ?? "",
-
-                    // SOLUSI 2: Gunakan null-coalescing (??) untuk memaksa DateTime? menjadi DateTime murni
-                    TanggalLahir = ParseDate(data?[ConfigService.GetMappingValue("TglLahirKey")]?.ToString()) ?? DateTime.MinValue
+                    Nama = data[namaKey]?.ToString()?.Trim() ?? string.Empty,
+                    RawGender = data[genderKey]?.ToString()?.Trim() ?? string.Empty,
+                    TanggalLahir = ParseDate(data[tglLahirKey]?.ToString()) ?? DateTime.MinValue
                 };
             }
-            catch { return null; }
+            // PERBAIKAN: Kata kunci 'private' telah dihapus agar sintaksis catch valid
+            catch (TaskCanceledException)
+            {
+                throw new TimeoutException("Koneksi ke server Rumah Sakit terputus (RTO / Timeout). Harap periksa jaringan lokal Anda.");
+            }
+            catch (HttpRequestException ex)
+            {
+                throw new InvalidOperationException($"Gagal menghubungi server rekam medis RS. Detail: {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                throw new FormatException($"Format data yang dikirim oleh server RS tidak valid atau telah berubah. Detail: {ex.Message}");
+            }
         }
 
-        private DateTime? ParseDate(string rawDate)
+        private DateTime? ParseDate(string? rawDate)
         {
             if (string.IsNullOrWhiteSpace(rawDate)) return null;
 
