@@ -132,14 +132,15 @@ namespace MedReport.Client.Services
                                             leftCol.Item().Text("Hasil:").SemiBold();
                                             leftCol.Item().Text(string.IsNullOrWhiteSpace(dataPasien.Diagnosis) ? "-" : dataPasien.Diagnosis);
                                         });
-
                                         row.RelativeItem().Column(rightCol =>
                                         {
                                             rightCol.Item().Text("Kesimpulan:").SemiBold();
-                                            rightCol.Item().PaddingBottom(10).Text("-");
+                                            // PERBAIKAN: Ambil dari data ObatPremedikasi (atau field kesimpulan jika Anda membuat TextBox baru nanti)
+                                            rightCol.Item().PaddingBottom(10).Text(string.IsNullOrWhiteSpace(dataPasien.ObatPremedikasi) ? "-" : dataPasien.ObatPremedikasi);
 
                                             rightCol.Item().Text("Saran:").SemiBold();
-                                            rightCol.Item().Text("-");
+                                            // PERBAIKAN: Ambil dari data Alat (atau field saran jika Anda membuat TextBox baru nanti)
+                                            rightCol.Item().Text(string.IsNullOrWhiteSpace(dataPasien.Alat) ? "-" : dataPasien.Alat);
                                         });
                                     });
                                 });
