@@ -34,13 +34,20 @@
                             Click="BtnRemoveLogo_Click"/>
                 </Grid>
 
-                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                    <Button Content="Import Logo"
-                            HorizontalAlignment="Left" Margin="0,0,0,5" 
-                            Click="BtnImportLogo_Click"/>
-                    <TextBlock Text="Airway Management Report" Foreground="White"
-                               FontSize="22" FontWeight="Bold"/>
-                </StackPanel>
+                <Grid Grid.Column="1">
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Left">
+                        <Button Content="Import Logo" Margin="0,0,0,5" Click="BtnImportLogo_Click" HorizontalAlignment="Left"/>
+                        <TextBlock Text="Airway Management Report" Foreground="White" FontSize="22" FontWeight="Bold"/>
+                    </StackPanel>
+
+                    <Button Content="⚙️" 
+                            Background="#005999" Foreground="White" 
+                            Padding="8,4" BorderThickness="0" 
+                            HorizontalAlignment="Right" 
+                            VerticalAlignment="Top"
+                            Cursor="Hand"
+                            Click="BtnNetworkSetting_Click"/>
+                </Grid>
             </Grid>
         </Border>
 
