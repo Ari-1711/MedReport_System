@@ -181,9 +181,8 @@ namespace MedReport.Client.Views
                 Hospital = TxtRs.Text?.Trim(),
                 Address = TxtAlamatRs.Text?.Trim(),
 
-                TanggalLahir = DpTanggalLahir.SelectedDate.HasValue
-                               ? DpTanggalLahir.SelectedDate.Value.ToString("dd MMMM yyyy", new System.Globalization.CultureInfo("id-ID"))
-                               : "",
+                // PERBAIKAN: Berikan DateTime murni ke model. Jika kosong, isi dengan DateTime.MinValue
+                TanggalLahir = DpTanggalLahir.SelectedDate ?? DateTime.MinValue,
 
                 Gender = (CmbGender.SelectedItem as ComboBoxItem)?.Content?.ToString(),
                 Dokter = CmbDokter.SelectedItem?.ToString(),

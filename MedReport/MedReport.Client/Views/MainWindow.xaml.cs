@@ -205,33 +205,18 @@ namespace MedReport.Client
             try
             {
                 // --- TAHAP 3: EKSTRAKSI DATA UI (Wajib dilakukan di UI Thread) ---
-                var catatanPemeriksaan = TandaTangan.GetProcedureText();
                 gambarTandaTanganBytes = TandaTangan.GetSignatureImage();
                 logoBytes = GetBytesFromFile(_hospitalLogoPath);
 
-                // Ubah semua foto di galeri menjadi biner sebelum dilempar ke mesin PDF
-                kumpulanFotoBytes = new List<byte[]?>();
-                foreach (var uiModel in GaleriFoto.SelectedPhotos)
-                {
-                    // Ambil OriginalPath dari DataModel internalnya
-                    byte[]? fileBiner = GetBytesFromFile(uiModel.DataModel.OriginalPath);
-                    if (fileBiner != null) kumpulanFotoBytes.Add(fileBiner);
-                }
+                // MASUKKAN RELASI GAMBAR: Ambil list data model murni dari wrapper UI galeri ke dataPasien
+                dataPasien.FotoEndoskopi = GaleriFoto.SelectedPhotos.Select(p => p.DataModel).ToList();
 
                 // --- TAHAP 4: PROSES BERAT DI BACKGROUND THREAD ---
-                // Melempar tugas QuestPDF ke thread terpisah agar aplikasi tidak "Not Responding"
                 await Task.Run(() =>
                 {
-                    ReportService.Generate(dataPasien, catatanPemeriksaan, kumpulanFotoBytes, gambarTandaTanganBytes, logoBytes);
+                    // SEKARANG HANYA MELEMPAR 3 ARGUMEN (Sesuai dengan blueprint ReportService yang baru)
+                    ReportService.Generate(dataPasien, gambarTandaTanganBytes, logoBytes);
                 });
-
-                // Notifikasi sukses
-                MessageBox.Show("Laporan PDF berhasil dibuat!", "Sukses", MessageBoxButton.OK, MessageBoxImage.Information);
-
-                // Mencegah Kontaminasi Data Medis dengan membersihkan form otomatis untuk pasien berikutnya
-                FormPasien.ResetFormPasien();
-                GaleriFoto.ResetGaleri();
-                TandaTangan.ResetTandaTangan();
             }
             catch (Exception ex)
             {
