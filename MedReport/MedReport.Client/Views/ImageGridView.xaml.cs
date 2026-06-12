@@ -14,48 +14,47 @@ using System.Windows.Navigation;
 using System.Windows.Shapes;
 using System.Linq;
 using MedReport.Client.Models;
+using MedReport.Client.Utilities; // WAJIB: Panggil folder Utilities tempat ImageHelper berada
 
 namespace MedReport.Client.Views
 {
+    /// <summary>
+    /// MODEL KHUSUS UI (UI-Wrapper Model)
+    /// Digunakan untuk menjembatani MedicalImageModel murni dengan kebutuhan render elemen XAML.
+    /// Menjaga berkas di folder 'Models' tetap bersih dari dependensi WPF.
+    /// </summary>
+    public class MedicalImageUiModel
+    {
+        public MedicalImageModel DataModel { get; set; }
+        public BitmapImage Thumbnail { get; set; }
+    }
+
     public partial class ImageGridView : UserControl
     {
-        // -------------------------------------------------------------------------
-        // OBSERVABLE COLLECTION: Jantung dari Data Binding UI
-        // Menggunakan ObservableCollection agar setiap kali ada foto ditambah/dihapus, 
-        // tampilan galeri di layar (PhotoGallery) otomatis memperbarui dirinya sendiri
-        // tanpa perlu kita tulis kode manual untuk me-refresh layar.
-        // -------------------------------------------------------------------------
-        public ObservableCollection<MedicalImageModel> SelectedPhotos { get; set; }
+        // Koleksi UI sekarang mengikat MedicalImageUiModel agar XAML bisa membaca properti .Thumbnail
+        public ObservableCollection<MedicalImageUiModel> SelectedPhotos { get; set; }
 
-        // -------------------------------------------------------------------------
-        // CONSTRUCTOR: Dipanggil saat UserControl Galeri Foto dimuat
-        // -------------------------------------------------------------------------
         public ImageGridView()
         {
             InitializeComponent();
-            SelectedPhotos = new ObservableCollection<MedicalImageModel>();
-
-            // Menyambungkan "Pipa Data" dari variabel SelectedPhotos ke elemen UI XAML (ItemsControl)
+            SelectedPhotos = new ObservableCollection<MedicalImageUiModel>();
             PhotoGallery.ItemsSource = SelectedPhotos;
         }
 
-        // -------------------------------------------------------------------------
-        // FUNGSI RESET: Membersihkan galeri dan indikator jumlah foto
-        // Dipanggil dari MainWindow setelah laporan PDF sukses dibuat agar foto
-        // pasien sebelumnya tidak tercampur ke laporan pasien berikutnya.
-        // -------------------------------------------------------------------------
+        // Properti publik untuk MainWindow agar tetap bisa mengambil list data model murninya saat cetak PDF
+        public List<MedicalImageModel> SelectedPhotosDataModels
+        {
+            get { return SelectedPhotos.Select(p => p.DataModel).ToList(); }
+        }
+
         public void ResetGaleri()
         {
             SelectedPhotos.Clear();
             TxtPhotoCount.Text = " (0/8 Photos)";
         }
 
-        // -------------------------------------------------------------------------
-        // FUNGSI UTAMA: Menambahkan gambar ke dalam galeri dengan proteksi memori ekstrem
-        // -------------------------------------------------------------------------
         private void BtnAddImage_Click(object sender, RoutedEventArgs e)
         {
-            // Proteksi Lapis 1: Mencegah masuk jika dari awal galeri sudah penuh (8 foto)
             if (SelectedPhotos.Count >= 8)
             {
                 MessageBox.Show("Maksimal 8 foto saja.", "Batas Maksimal", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -64,91 +63,59 @@ namespace MedReport.Client.Views
 
             OpenFileDialog openFileDialog = new OpenFileDialog();
             openFileDialog.Filter = "Image files (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg";
-            openFileDialog.Multiselect = true; // Mengizinkan perawat memilih banyak foto sekaligus (Blok file)
+            openFileDialog.Multiselect = true;
 
             if (openFileDialog.ShowDialog() == true)
             {
-                // Looping untuk memproses setiap file yang dipilih oleh perawat
                 foreach (string fileName in openFileDialog.FileNames)
                 {
-                    // Proteksi Lapis 2: Jika perawat memilih 10 foto sekaligus, 
-                    // sistem akan memotong pemrosesan tepat setelah foto ke-8.
                     if (SelectedPhotos.Count >= 8)
                     {
                         MessageBox.Show("Beberapa foto tidak ditambahkan karena melebihi batas maksimal (8 foto).", "Batas Maksimal", MessageBoxButton.OK, MessageBoxImage.Warning);
-                        break; // Hentikan perulangan secara paksa
+                        break;
                     }
 
-                    // Proteksi Lapis 3: CEK DUPLIKASI EKSTREM
-                    // Mengecek apakah jalur file (path) yang sama persis sudah ada di dalam koleksi.
-                    // Mencegah perawat tidak sengaja memasukkan 1 gambar yang sama dua kali.
-                    if (SelectedPhotos.Any(p => p.OriginalPath.Equals(fileName, StringComparison.OrdinalIgnoreCase)))
+                    // Cek duplikasi berdasarkan data model di dalam wrapper
+                    if (SelectedPhotos.Any(p => p.DataModel.OriginalPath.Equals(fileName, StringComparison.OrdinalIgnoreCase)))
                     {
-                        continue; // Lewati (skip) gambar ini, lanjut proses file berikutnya
+                        continue;
                     }
 
-                    // Proteksi Lapis 4: PERLINDUNGAN FILE KORUP & MANAJEMEN RAM
                     try
                     {
-                        BitmapImage thumbnailBitmap = new BitmapImage();
+                        // IMPLEMENTASI OPTIMASI: Panggil fungsi dari Utilities tanpa mengunci file fisik
+                        BitmapImage thumbnailBitmap = ImageHelper.LoadThumbnailWithoutLocking(fileName);
 
-                        // Proses perakitan objek gambar secara manual untuk mengunci opsi performa
-                        thumbnailBitmap.BeginInit();
-                        thumbnailBitmap.UriSource = new Uri(fileName);
-
-                        // DECODE PIXEL: Mencegah aplikasi meload gambar endoskopi 4K (yang memakan RAM bergiga-giga).
-                        // Kita paksa render maksimal lebar 300px saja untuk keperluan *preview* di layar.
-                        thumbnailBitmap.DecodePixelWidth = 300;
-
-                        // CACHE OPTION: Memaksa file langsung di-copy ke RAM lalu dilepas dari harddisk,
-                        // sehingga file asli tidak berstatus "In Use/Terkunci" jika user ingin menghapusnya.
-                        thumbnailBitmap.CacheOption = BitmapCacheOption.OnLoad;
-                        thumbnailBitmap.EndInit();
-
-                        // FREEZE: Membekukan gambar UI agar tidak bisa dimodifikasi lagi. 
-                        // Ini membuat WPF merender gambar secara jauh lebih cepat dan ringan di memori.
-                        if (thumbnailBitmap.CanFreeze)
+                        if (thumbnailBitmap != null)
                         {
-                            thumbnailBitmap.Freeze();
+                            // Bungkus model data murni dan properti visual ke dalam wrapper UI
+                            SelectedPhotos.Add(new MedicalImageUiModel
+                            {
+                                DataModel = new MedicalImageModel { OriginalPath = fileName },
+                                Thumbnail = thumbnailBitmap
+                            });
                         }
-
-                        // Memasukkan hasil render ke dalam Data Model yang akan dibaca oleh pembuat PDF
-                        SelectedPhotos.Add(new MedicalImageModel
-                        {
-                            OriginalPath = fileName, // Jalur file asli untuk ditarik PDF Engine nanti
-                            Thumbnail = thumbnailBitmap // Gambar resolusi rendah untuk dipajang di layar UI
-                        });
                     }
                     catch (Exception)
                     {
-                        // Jika 1 file korup, jangan biarkan aplikasi force close.
-                        // Beritahu user file mana yang rusak, lalu lanjutkan loop ke file berikutnya.
                         MessageBox.Show($"File '{System.IO.Path.GetFileName(fileName)}' rusak atau tidak dapat dibaca oleh sistem.", "Error Import", MessageBoxButton.OK, MessageBoxImage.Error);
                     }
                 }
 
-                // Perbarui teks indikator jumlah (misal: "3/8 Photos")
                 TxtPhotoCount.Text = $" ({SelectedPhotos.Count}/8 Photos)";
             }
         }
 
-        // -------------------------------------------------------------------------
-        // FUNGSI PENGHAPUSAN: Menghapus 1 gambar spesifik dari galeri
-        // -------------------------------------------------------------------------
         private void BtnRemoveImage_Click(object sender, RoutedEventArgs e)
         {
-            // 1. Identifikasi tombol mana yang sedang diklik
             Button btn = (Button)sender;
+            // Unboxing ke UI model wrapper
+            MedicalImageUiModel imageToRemove = btn.Tag as MedicalImageUiModel;
 
-            // 2. Ekstrak data model spesifik dari tombol tersebut (di XAML, kita mengikat Tag ke {Binding})
-            MedicalImageModel imageToRemove = btn.Tag as MedicalImageModel;
-
-            // 3. Jika datanya valid, hapus dari ObservableCollection
-            // (Begitu dihapus, gambar akan otomatis menghilang dari layar berkat fitur Data Binding)
             if (imageToRemove != null)
             {
                 SelectedPhotos.Remove(imageToRemove);
-                TxtPhotoCount.Text = $" ({SelectedPhotos.Count}/8 Photos)"; // Update teks indikator
+                TxtPhotoCount.Text = $" ({SelectedPhotos.Count}/8 Photos)";
             }
         }
     }

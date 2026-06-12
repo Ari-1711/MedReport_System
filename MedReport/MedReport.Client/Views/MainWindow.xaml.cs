@@ -211,9 +211,10 @@ namespace MedReport.Client
 
                 // Ubah semua foto di galeri menjadi biner sebelum dilempar ke mesin PDF
                 kumpulanFotoBytes = new List<byte[]?>();
-                foreach (var modelGambar in GaleriFoto.SelectedPhotos)
+                foreach (var uiModel in GaleriFoto.SelectedPhotos)
                 {
-                    byte[]? fileBiner = GetBytesFromFile(modelGambar.OriginalPath);
+                    // Ambil OriginalPath dari DataModel internalnya
+                    byte[]? fileBiner = GetBytesFromFile(uiModel.DataModel.OriginalPath);
                     if (fileBiner != null) kumpulanFotoBytes.Add(fileBiner);
                 }
 
