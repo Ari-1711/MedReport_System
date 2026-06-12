@@ -1,35 +1,22 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Security.Policy;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
-using Path = System.IO.Path;
 using MedReport.Client.Models;
 
 namespace MedReport.Client.Views
 {
     public partial class SignatureView : UserControl
     {
-        // -------------------------------------------------------------------------
-        // CONSTRUCTOR: Dipanggil saat UserControl Tanda Tangan dimuat di layar
-        // -------------------------------------------------------------------------
         public SignatureView()
         {
             InitializeComponent();
         }
 
-        // -------------------------------------------------------------------------
-        // FUNGSI RESET GLOBAL: Pembersihan Pasca-Cetak
-        // -------------------------------------------------------------------------
         public void ResetTandaTangan()
         {
             Sigpad?.Strokes?.Clear();
@@ -39,17 +26,11 @@ namespace MedReport.Client.Views
             TxtSaran.Clear();
         }
 
-        // -------------------------------------------------------------------------
-        // FUNGSI RESET LOKAL: Tombol UI "Clear"
-        // -------------------------------------------------------------------------
         private void BtnClearSignature_Click(object sender, RoutedEventArgs e)
         {
             Sigpad?.Strokes?.Clear();
         }
 
-        // -------------------------------------------------------------------------
-        // FUNGSI EKSTRAKSI DATA: Menarik teks dari layar untuk QuestPDF
-        // -------------------------------------------------------------------------
         public (string Anamnesa, string Hasil, string Kesimpulan, string Saran) GetProcedureText()
         {
             return (
@@ -61,55 +42,53 @@ namespace MedReport.Client.Views
         }
 
         // -------------------------------------------------------------------------
-        // CORE RENDER ENGINE: Dioptimalkan dengan High-DPI untuk Ketajaman Cetak
+        // CORE RENDER ENGINE: Terproteksi dari Kegagalan Format Piksel & Blind Spot Legal
         // -------------------------------------------------------------------------
         public byte[]? GetSignatureImage()
         {
-            // Fallback Lapis 1: Jika dokter tidak tanda tangan (memilih tanda tangan basah),
-            // kembalikan null secara aman agar PDF tahu harus mengosongkan space.
+            // Jika pad tanda tangan kosong, kembalikan null secara legal (Suster/Dokter memilih tanda tangan basah)
             if (Sigpad == null || Sigpad.Strokes.Count == 0) return null;
 
-            // MENGHINDARI CRASH DIMENSI (DPI SCALING)
             double actualWidth = Sigpad.ActualWidth;
             double actualHeight = Sigpad.ActualHeight;
 
-            // Fallback Lapis 2: Mencegah ArgumentException jika UI belum selesai me-render komponen.
             if (actualWidth <= 0 || actualHeight <= 0) return null;
 
             try
             {
-                // IMPLEMENTASI OPTIMASI 3: HIGH-DPI SCALING FACTOR (3.0x)
-                // Kita kalikan resolusi render sebanyak 3x lipat agar garis tanda tangan tidak blur saat masuk PDF.
                 double scaleFactor = 3.0;
-
                 int renderWidth = (int)Math.Ceiling(actualWidth * scaleFactor);
                 int renderHeight = (int)Math.Ceiling(actualHeight * scaleFactor);
 
-                // Gunakan koordinat DPI yang dinaikkan (96 * 3 = 288 DPI) untuk kualitas cetak printer laser.
+                // SOLUSI AUDIT KUTU VISUAL: Kunci format piksel ke Pbgra32. 
+                // Format ini mengunci komponen Alpha Channel secara konstan agar latar belakang coretan 
+                // dipastikan 100% transparan dan bersih di atas kertas PDF, bebas dari bug kotak hitam.
                 RenderTargetBitmap rtb = new RenderTargetBitmap(
                     renderWidth,
                     renderHeight,
                     96d * scaleFactor,
                     96d * scaleFactor,
-                    PixelFormats.Default);
+                    PixelFormats.Pbgra32);
 
                 rtb.Render(Sigpad);
 
-                // ENCODING KE PNG (Mendukung transparansi latar belakang)
                 PngBitmapEncoder encoder = new PngBitmapEncoder();
                 encoder.Frames.Add(BitmapFrame.Create(rtb));
 
-                // MANAJEMEN MEMORI KETAT (MemoryStream)
-                using (System.IO.MemoryStream ms = new System.IO.MemoryStream())
+                using (MemoryStream ms = new MemoryStream())
                 {
                     encoder.Save(ms);
-                    return ms.ToArray(); // Kirim biner tajam ke pembuat PDF
+                    return ms.ToArray();
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Gagal merender tanda tangan: {ex.Message}");
-                return null;
+                // SOLUSI AUDIT ASPEK LEGAL: Jangan bungkam eror grafis! 
+                // Lempar exception bermakna agar MainWindow tahu proses konversi gagal akibat masalah sistem,
+                // sehingga aplikasi memblokir penerbitan laporan PDF ilegal tanpa tanda tangan.
+                throw new InvalidOperationException(
+                    "Sistem gagal melakukan konversi digital tanda tangan dokter akibat keterbatasan memori grafis komputer.\n\n" +
+                    $"Detail Kegagalan GDI+: {ex.Message}");
             }
         }
     }
