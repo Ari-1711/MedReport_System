@@ -1,8 +1,7 @@
-﻿using MedReport.Client.Models;
-using MedReport.Client.Services;
+﻿using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
-using System.Net.Http;
+using System.Collections.ObjectModel;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows;
@@ -14,6 +13,10 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using System.Linq;
+using MedReport.Client.Models;
+using MedReport.Client.Services;
+using System.Net.Http;
 
 namespace MedReport.Client.Views
 {
@@ -22,51 +25,36 @@ namespace MedReport.Client.Views
         // =========================================================================
         // IMPLEMENTASI OPTIMASI 2: INSTANCE TETAP & MEKANISME GEMBOK
         // =========================================================================
-        // 1. Instansiasi sekali saja di tingkat kelas agar hemat RAM (Singleton-like)
         private readonly HospitalApiService _apiService = new HospitalApiService();
-
-        // 2. Variabel gembok (Flag) untuk mencegah suster melakukan spam Enter
         private bool _isSearching = false;
 
-        // -------------------------------------------------------------------------
-        // CONSTRUCTOR: Dipanggil pertama kali saat tampilan (View) ini dimuat
-        // -------------------------------------------------------------------------
+        public ObservableCollection<MedicalImageUiModel> SelectedPhotos { get; set; }
+
         public PatientFormView()
         {
             InitializeComponent();
-            MuatTemplateRs();     // Tarik data rumah sakit ke layar
-            MuatDaftarDokter();   // Tarik daftar nama dokter dari API
+            MuatTemplateRs();
+            MuatDaftarDokter();
         }
 
-        // -------------------------------------------------------------------------
-        // FUNGSI INIT: Membaca nama & alamat RS dari config.json
-        // Tujuannya agar aplikasi bisa dipakai di RS mana saja tanpa ubah kode (Hardcode)
-        // -------------------------------------------------------------------------
         private void MuatTemplateRs()
         {
             TxtRs.Text = ConfigService.HospitalName;
             TxtAlamatRs.Text = ConfigService.HospitalAddress;
         }
 
-        // -------------------------------------------------------------------------
-        // FUNGSI INIT: Menarik daftar dokter dari server API
-        // Memiliki sabuk pengaman agar UI tidak terkunci jika server mati
-        // -------------------------------------------------------------------------
         private async void MuatDaftarDokter()
         {
             try
             {
-                // Ambil URL dokter
                 string apiUrlDokter = ConfigService.GetValue("DoctorApiUrl");
 
-                // SOLUSI: Jika config belum siap/kosong, gunakan URL cadangan (localhost)
                 if (string.IsNullOrWhiteSpace(apiUrlDokter))
                 {
                     apiUrlDokter = "http://localhost:3000/dokter";
                 }
 
                 string keyNamaDokter = ConfigService.GetMappingValue("DoctorNameKey");
-                // Jika mapping key kosong, gunakan default "nama"
                 if (string.IsNullOrWhiteSpace(keyNamaDokter))
                 {
                     keyNamaDokter = "nama";
@@ -88,22 +76,16 @@ namespace MedReport.Client.Views
             }
             catch
             {
-                // Jangan biarkan aplikasi crash jika server API dokter mati
+                // Safety net agar UI tidak freeze jika API down
             }
         }
 
-        // -------------------------------------------------------------------------
-        // FUNGSI VALIDASI UI: Mencegah pengguna mengetik angka (0-9) di keyboard
-        // -------------------------------------------------------------------------
         private void LetterValidationTextBox(object sender, TextCompositionEventArgs e)
         {
             Regex regex = new Regex("[0-9]+");
             e.Handled = regex.IsMatch(e.Text);
         }
 
-        // -------------------------------------------------------------------------
-        // FUNGSI VALIDASI UI: Mencegah pengguna melakukan Copy-Paste (Ctrl+V) memuat angka
-        // -------------------------------------------------------------------------
         private void LetterTextBoxPasting(object sender, DataObjectPastingEventArgs e)
         {
             if (e.DataObject.GetDataPresent(typeof(string)))
@@ -123,13 +105,12 @@ namespace MedReport.Client.Views
         }
 
         // -------------------------------------------------------------------------
-        // EVENT LISTENER: Dioptimalkan dengan Async Lock & Visual Feedback
+        // EVENT LISTENER: Sinkronisasi Data Model Pasien Baru
         // -------------------------------------------------------------------------
         private async void TxtIdPasien_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key == Key.Enter)
             {
-                // JIKA GEMBOK AKTIF: Langsung batalkan proses (abaikan spam Enter)
                 if (_isSearching) return;
 
                 string idInput = TxtIdPasien.Text.Trim();
@@ -137,23 +118,33 @@ namespace MedReport.Client.Views
 
                 try
                 {
-                    // PASANG GEMBOK & MATIKAN INPUT (Visual Feedback agar suster tahu aplikasi sedang bekerja)
                     _isSearching = true;
                     TxtIdPasien.IsEnabled = false;
 
-                    // Gunakan _apiService tingkat kelas yang hemat memori
                     var hasil = await _apiService.CariPasienAsync(idInput);
 
                     if (hasil != null)
                     {
                         TxtNama.Text = hasil.Nama;
-                        DpTanggalLahir.SelectedDate = hasil.TanggalLahir;
 
-                        if (!string.IsNullOrEmpty(hasil.Gender))
+                        // PERBAIKAN 1: Kembalikan DateTime murni ke DateTime? agar sinkron dengan DatePicker WPF
+                        if (hasil.TanggalLahir == DateTime.MinValue)
+                            DpTanggalLahir.SelectedDate = null;
+                        else
+                            DpTanggalLahir.SelectedDate = hasil.TanggalLahir;
+
+                        // PERBAIKAN 2: Gunakan properti .RawGender untuk pencocokan elemen ComboBox UI
+                        if (!string.IsNullOrEmpty(hasil.RawGender))
                         {
+                            // Gunakan hasil normalisasi data internal untuk akurasi pencarian di UI
+                            string targetGenderText = hasil.NormalizedGender == GenderType.LakiLaki ? "Laki-laki" : "Perempuan";
+
                             foreach (ComboBoxItem item in CmbGender.Items)
                             {
-                                if (item.Content.ToString() == hasil.Gender)
+                                string itemText = item.Content.ToString();
+                                // Cek kecocokan teks murni UI ("Laki-laki"/"Perempuan") atau kode mentah API ("L"/"P")
+                                if (itemText.Equals(targetGenderText, StringComparison.OrdinalIgnoreCase) ||
+                                    itemText.StartsWith(hasil.RawGender, StringComparison.OrdinalIgnoreCase))
                                 {
                                     CmbGender.SelectedItem = item;
                                     break;
@@ -174,17 +165,13 @@ namespace MedReport.Client.Views
                 }
                 finally
                 {
-                    // LEPAS GEMBOK & BUKA KEMBALI INPUT (Selalu dieksekusi baik berhasil maupun error)
                     _isSearching = false;
                     TxtIdPasien.IsEnabled = true;
-                    TxtIdPasien.Focus(); // Kembalikan fokus kursor agar suster nyaman
+                    TxtIdPasien.Focus();
                 }
             }
         }
 
-        // -------------------------------------------------------------------------
-        // FUNGSI PENGUMPUL DATA: Dipanggil oleh MainWindow sebelum membuat PDF
-        // -------------------------------------------------------------------------
         public ReportDataModel GetPatientData()
         {
             return new ReportDataModel
@@ -208,9 +195,6 @@ namespace MedReport.Client.Views
             };
         }
 
-        // -------------------------------------------------------------------------
-        // FUNGSI RESET: Membersihkan area layar klinis
-        // -------------------------------------------------------------------------
         public void ResetFormPasien()
         {
             TxtIdPasien.Clear();
