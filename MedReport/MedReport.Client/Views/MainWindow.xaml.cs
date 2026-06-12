@@ -212,11 +212,7 @@ namespace MedReport.Client
                 dataPasien.FotoEndoskopi = GaleriFoto.SelectedPhotos.Select(p => p.DataModel).ToList();
 
                 // --- TAHAP 4: PROSES BERAT DI BACKGROUND THREAD ---
-                await Task.Run(() =>
-                {
-                    // SEKARANG HANYA MELEMPAR 3 ARGUMEN (Sesuai dengan blueprint ReportService yang baru)
-                    ReportService.Generate(dataPasien, gambarTandaTanganBytes, logoBytes);
-                });
+                await ReportService.GenerateAsync(dataPasien, gambarTandaTanganBytes, logoBytes);
             }
             catch (Exception ex)
             {
