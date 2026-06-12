@@ -14,24 +14,18 @@ using System.Windows.Navigation;
 using System.Windows.Shapes;
 using System.Linq;
 using MedReport.Client.Models;
-using MedReport.Client.Utilities; // WAJIB: Panggil folder Utilities tempat ImageHelper berada
+using MedReport.Client.Utilities;
 
 namespace MedReport.Client.Views
 {
-    /// <summary>
-    /// MODEL KHUSUS UI (UI-Wrapper Model)
-    /// Digunakan untuk menjembatani MedicalImageModel murni dengan kebutuhan render elemen XAML.
-    /// Menjaga berkas di folder 'Models' tetap bersih dari dependensi WPF.
-    /// </summary>
     public class MedicalImageUiModel
     {
-        public MedicalImageModel DataModel { get; set; }
-        public BitmapImage Thumbnail { get; set; }
+        public MedicalImageModel DataModel { get; set; } = new MedicalImageModel();
+        public BitmapImage? Thumbnail { get; set; }
     }
 
     public partial class ImageGridView : UserControl
     {
-        // Koleksi UI sekarang mengikat MedicalImageUiModel agar XAML bisa membaca properti .Thumbnail
         public ObservableCollection<MedicalImageUiModel> SelectedPhotos { get; set; }
 
         public ImageGridView()
@@ -39,18 +33,24 @@ namespace MedReport.Client.Views
             InitializeComponent();
             SelectedPhotos = new ObservableCollection<MedicalImageUiModel>();
             PhotoGallery.ItemsSource = SelectedPhotos;
+            PerbaruiIndikatorKuota(); // Inisialisasi tampilan awal
         }
 
-        // Properti publik untuk MainWindow agar tetap bisa mengambil list data model murninya saat cetak PDF
         public List<MedicalImageModel> SelectedPhotosDataModels
         {
             get { return SelectedPhotos.Select(p => p.DataModel).ToList(); }
         }
 
+        // SOLUSI AUDIT MUTU 1: Satukan logika pembaruan teks kuota ke dalam satu fungsi terpusat
+        private void PerbaruiIndikatorKuota()
+        {
+            TxtPhotoCount.Text = $" ({SelectedPhotos.Count}/8 Photos)";
+        }
+
         public void ResetGaleri()
         {
             SelectedPhotos.Clear();
-            TxtPhotoCount.Text = " (0/8 Photos)";
+            PerbaruiIndikatorKuota();
         }
 
         private void BtnAddImage_Click(object sender, RoutedEventArgs e)
@@ -75,20 +75,19 @@ namespace MedReport.Client.Views
                         break;
                     }
 
-                    // Cek duplikasi berdasarkan data model di dalam wrapper
-                    if (SelectedPhotos.Any(p => p.DataModel.OriginalPath.Equals(fileName, StringComparison.OrdinalIgnoreCase)))
+                    // SOLUSI AUDIT CRITICAL 2: Defensive check menggunakan string.Equals secara aman dari bahaya Null
+                    if (SelectedPhotos.Any(p => p.DataModel?.OriginalPath != null &&
+                        string.Equals(p.DataModel.OriginalPath, fileName, StringComparison.OrdinalIgnoreCase)))
                     {
                         continue;
                     }
 
                     try
                     {
-                        // IMPLEMENTASI OPTIMASI: Panggil fungsi dari Utilities tanpa mengunci file fisik
                         BitmapImage thumbnailBitmap = ImageHelper.LoadThumbnailWithoutLocking(fileName);
 
                         if (thumbnailBitmap != null)
                         {
-                            // Bungkus model data murni dan properti visual ke dalam wrapper UI
                             SelectedPhotos.Add(new MedicalImageUiModel
                             {
                                 DataModel = new MedicalImageModel { OriginalPath = fileName },
@@ -102,20 +101,19 @@ namespace MedReport.Client.Views
                     }
                 }
 
-                TxtPhotoCount.Text = $" ({SelectedPhotos.Count}/8 Photos)";
+                PerbaruiIndikatorKuota();
             }
         }
 
         private void BtnRemoveImage_Click(object sender, RoutedEventArgs e)
         {
             Button btn = (Button)sender;
-            // Unboxing ke UI model wrapper
             MedicalImageUiModel imageToRemove = btn.Tag as MedicalImageUiModel;
 
             if (imageToRemove != null)
             {
                 SelectedPhotos.Remove(imageToRemove);
-                TxtPhotoCount.Text = $" ({SelectedPhotos.Count}/8 Photos)";
+                PerbaruiIndikatorKuota();
             }
         }
     }
