@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:local="clr-namespace:MedReport.Client"
+             xmlns:System="clr-namespace:System;assembly=mscorlib"
              mc:Ignorable="d" 
              d:DesignHeight="550" d:DesignWidth="800">
     <Grid Margin="10">
@@ -23,24 +24,28 @@
 
         <StackPanel Grid.Row="0" Grid.Column="0" Margin="5">
             <TextBlock Text="ID Pasien:"/>
-            <TextBox x:Name="TxtIdPasien" KeyDown="TxtIdPasien_KeyDown"/>
+            <TextBox x:Name="TxtIdPasien" 
+             KeyDown="TxtIdPasien_KeyDown"
+             DataObject.Pasting="IdTextBoxPasting"/>
         </StackPanel>
 
         <StackPanel Grid.Row="0" Grid.Column="1" Margin="5">
             <TextBlock Text="Nama Pasien:"/>
             <TextBox x:Name="TxtNama" 
-                     PreviewTextInput="LetterValidationTextBox" 
-                     DataObject.Pasting="LetterTextBoxPasting" />
+             PreviewTextInput="NameValidationTextBox" 
+             DataObject.Pasting="NameTextBoxPasting" />
         </StackPanel>
 
         <StackPanel Grid.Row="0" Grid.Column="2" Margin="5">
             <TextBlock Text="Tanggal Lahir:"/>
-            <DatePicker x:Name="DpTanggalLahir"/>
+            <DatePicker x:Name="DpTanggalLahir" 
+                DisplayDateEnd="{x:Static System:DateTime.Today}"/>
         </StackPanel>
 
         <StackPanel Grid.Row="1" Grid.Column="0" Margin="5">
             <TextBlock Text="Jenis Kelamin:"/>
             <ComboBox x:Name="CmbGender" SelectedIndex="0">
+                <ComboBoxItem Content="- Pilih Jenis Kelamin -" IsEnabled="False"/>
                 <ComboBoxItem Content="Laki-laki"/>
                 <ComboBoxItem Content="Perempuan"/>
             </ComboBox>

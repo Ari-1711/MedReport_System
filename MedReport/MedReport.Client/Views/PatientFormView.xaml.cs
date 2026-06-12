@@ -22,10 +22,10 @@ namespace MedReport.Client.Views
 {
     public partial class PatientFormView : UserControl
     {
-        // =========================================================================
-        // IMPLEMENTASI OPTIMASI 2: INSTANCE TETAP & MEKANISME GEMBOK
-        // =========================================================================
         private readonly HospitalApiService _apiService = new HospitalApiService();
+
+        // SOLUSI SOCKET EXHAUSTION: Gunakan satu instans HttpClient statis bersama untuk internal form
+        private static readonly HttpClient _sharedClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
         private bool _isSearching = false;
 
         public ObservableCollection<MedicalImageUiModel> SelectedPhotos { get; set; }
@@ -48,7 +48,6 @@ namespace MedReport.Client.Views
             try
             {
                 string apiUrlDokter = ConfigService.GetValue("DoctorApiUrl");
-
                 if (string.IsNullOrWhiteSpace(apiUrlDokter))
                 {
                     apiUrlDokter = "http://localhost:3000/dokter";
@@ -60,8 +59,8 @@ namespace MedReport.Client.Views
                     keyNamaDokter = "nama";
                 }
 
-                using HttpClient client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-                string response = await client.GetStringAsync(apiUrlDokter);
+                // Menggunakan _sharedClient statis, bukan instansiasi 'new' berulang
+                string response = await _sharedClient.GetStringAsync(apiUrlDokter);
                 var dokterList = System.Text.Json.Nodes.JsonNode.Parse(response)?.AsArray();
 
                 CmbDokter.Items.Clear();
@@ -76,37 +75,45 @@ namespace MedReport.Client.Views
             }
             catch
             {
-                // Safety net agar UI tidak freeze jika API down
+                // UI tetap aman jika server data master dokter down
             }
         }
 
-        private void LetterValidationTextBox(object sender, TextCompositionEventArgs e)
+        // =========================================================================
+        // VALIDASI INPUT EKSTREM (ANTI-MALAPRAKTIK DATA)
+        // =========================================================================
+
+        // Hanya izinkan huruf, spasi, titik, koma, dan apostrof untuk nama medis resmi
+        private void NameValidationTextBox(object sender, TextCompositionEventArgs e)
         {
-            Regex regex = new Regex("[0-9]+");
+            Regex regex = new Regex(@"[^a-zA-Z\s\.\,\']");
             e.Handled = regex.IsMatch(e.Text);
         }
 
-        private void LetterTextBoxPasting(object sender, DataObjectPastingEventArgs e)
+        private void NameTextBoxPasting(object sender, DataObjectPastingEventArgs e)
         {
             if (e.DataObject.GetDataPresent(typeof(string)))
             {
                 string text = (string)e.DataObject.GetData(typeof(string));
-                Regex regex = new Regex("[0-9]+");
-
-                if (regex.IsMatch(text))
-                {
-                    e.CancelCommand();
-                }
+                Regex regex = new Regex(@"[^a-zA-Z\s\.\,\']");
+                if (regex.IsMatch(text)) e.CancelCommand();
             }
-            else
-            {
-                e.CancelCommand();
-            }
+            else e.CancelCommand();
         }
 
-        // -------------------------------------------------------------------------
-        // EVENT LISTENER: Sinkronisasi Data Model Pasien Baru
-        // -------------------------------------------------------------------------
+        // Amankan ID Pasien dari karakter liar clipboard
+        private void IdTextBoxPasting(object sender, DataObjectPastingEventArgs e)
+        {
+            if (e.DataObject.GetDataPresent(typeof(string)))
+            {
+                string text = (string)e.DataObject.GetData(typeof(string));
+                // ID Pasien hanya boleh berisi Alfanumerik dan tanda hubung standar (-)
+                Regex regex = new Regex(@"[^a-zA-Z0-9\-]");
+                if (regex.IsMatch(text)) e.CancelCommand();
+            }
+            else e.CancelCommand();
+        }
+
         private async void TxtIdPasien_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key == Key.Enter)
@@ -127,22 +134,18 @@ namespace MedReport.Client.Views
                     {
                         TxtNama.Text = hasil.Nama;
 
-                        // PERBAIKAN 1: Kembalikan DateTime murni ke DateTime? agar sinkron dengan DatePicker WPF
                         if (hasil.TanggalLahir == DateTime.MinValue)
                             DpTanggalLahir.SelectedDate = null;
                         else
                             DpTanggalLahir.SelectedDate = hasil.TanggalLahir;
 
-                        // PERBAIKAN 2: Gunakan properti .RawGender untuk pencocokan elemen ComboBox UI
                         if (!string.IsNullOrEmpty(hasil.RawGender))
                         {
-                            // Gunakan hasil normalisasi data internal untuk akurasi pencarian di UI
                             string targetGenderText = hasil.NormalizedGender == GenderType.LakiLaki ? "Laki-laki" : "Perempuan";
 
                             foreach (ComboBoxItem item in CmbGender.Items)
                             {
                                 string itemText = item.Content.ToString();
-                                // Cek kecocokan teks murni UI ("Laki-laki"/"Perempuan") atau kode mentah API ("L"/"P")
                                 if (itemText.Equals(targetGenderText, StringComparison.OrdinalIgnoreCase) ||
                                     itemText.StartsWith(hasil.RawGender, StringComparison.OrdinalIgnoreCase))
                                 {
@@ -157,6 +160,7 @@ namespace MedReport.Client.Views
                         MessageBox.Show("Pasien tidak ditemukan.", "Peringatan", MessageBoxButton.OK, MessageBoxImage.Warning);
                         TxtNama.Clear();
                         DpTanggalLahir.SelectedDate = null;
+                        CmbGender.SelectedIndex = 0;
                     }
                 }
                 catch (Exception ex)
@@ -174,23 +178,22 @@ namespace MedReport.Client.Views
 
         public ReportDataModel GetPatientData()
         {
+            // Validasi sadar: Jika suster tidak memilih gender, kembalikan teks kosong, bukan instruksi prompt UI
+            string selectedGender = CmbGender.SelectedIndex == 0 ? string.Empty : (CmbGender.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? string.Empty;
+
             return new ReportDataModel
             {
-                IdPasien = TxtIdPasien.Text?.Trim(),
-                Nama = TxtNama.Text?.Trim(),
-                Hospital = TxtRs.Text?.Trim(),
-                Address = TxtAlamatRs.Text?.Trim(),
-
-                // PERBAIKAN: Berikan DateTime murni ke model. Jika kosong, isi dengan DateTime.MinValue
+                IdPasien = TxtIdPasien.Text?.Trim() ?? string.Empty,
+                Nama = TxtNama.Text?.Trim() ?? string.Empty,
+                Hospital = TxtRs.Text?.Trim() ?? string.Empty,
+                Address = TxtAlamatRs.Text?.Trim() ?? string.Empty,
                 TanggalLahir = DpTanggalLahir.SelectedDate ?? DateTime.MinValue,
-
-                Gender = (CmbGender.SelectedItem as ComboBoxItem)?.Content?.ToString(),
-                Dokter = CmbDokter.SelectedItem?.ToString(),
-
-                Keluhan = TxtKeluhan.Text?.Trim(),
-                Diagnosis = TxtDiagnosis.Text?.Trim(),
-                ObatPremedikasi = TxtObatPremedikasi.Text?.Trim(),
-                Alat = TxtAlat.Text?.Trim()
+                Gender = selectedGender,
+                Dokter = CmbDokter.SelectedItem?.ToString() ?? string.Empty,
+                Keluhan = TxtKeluhan.Text?.Trim() ?? string.Empty,
+                Diagnosis = TxtDiagnosis.Text?.Trim() ?? string.Empty,
+                ObatPremedikasi = TxtObatPremedikasi.Text?.Trim() ?? string.Empty,
+                Alat = TxtAlat.Text?.Trim() ?? string.Empty
             };
         }
 
