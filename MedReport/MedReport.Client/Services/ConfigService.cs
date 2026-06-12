@@ -1,18 +1,21 @@
 ﻿using System;
 using System.IO;
-using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Windows; // Diperlukan untuk memunculkan MessageBox
 
 namespace MedReport.Client.Services
 {
     public static class ConfigService
     {
-        // Jalur file konfigurasi di folder Configuration dalam direktori aplikasi
-        private static readonly string ConfigPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Configuration", "config.json");
-        private static JsonNode _configCache;
+        // SOLUSI 1: Pindahkan jalur file ke AppData/Local demi menghindari UnauthorizedAccessException di Program Files
+        private static readonly string ConfigFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MedicalApp_Api", "Configuration");
+        private static readonly string ConfigPath = Path.Combine(ConfigFolder, "config.json");
 
-        // NILAI FALLBACK (BAN SEREP): Nilai ini akan digunakan otomatis jika file JSON rusak/hilang
+        private static JsonNode _configCache = new JsonObject();
+
+        // SOLUSI 3: Gembok sinkronisasi untuk menjamin Thread-Safety pada akses data statis
+        private static readonly object LockObject = new object();
+
+        // NILAI FALLBACK (BAN SEREP)
         private static readonly string DefaultApiUrl = "http://localhost:3000/pasien/";
         private static readonly string DefaultDoctorApiUrl = "http://localhost:3000/dokter";
         private static readonly string DefaultNamaKey = "nama_lengkap";
@@ -22,80 +25,81 @@ namespace MedReport.Client.Services
 
         public static void LoadConfig()
         {
-            try
+            lock (LockObject) // Kunci thread saat membaca file fisik
             {
-                // 1. CEK KEBERADAAN FILE
-                if (!File.Exists(ConfigPath))
-                {
-                    // Jika folder hilang, buat folder baru
-                    string directoryName = Path.GetDirectoryName(ConfigPath);
-                    if (!string.IsNullOrEmpty(directoryName)) Directory.CreateDirectory(directoryName);
-
-                    // Buat file JSON baru dengan isi kosong agar sistem tetap jalan
-                    _configCache = new JsonObject();
-                    File.WriteAllText(ConfigPath, _configCache.ToString());
-                    return;
-                }
-
-                // 2. COBA BACA ISI JSON
-                _configCache = JsonNode.Parse(File.ReadAllText(ConfigPath)) ?? new JsonObject();
-            }
-            catch (Exception ex)
-            {
-                // 3. NOTIFIKASI JIKA CORRUPT/RUSAK
-                MessageBox.Show(
-                    "File konfigurasi (config.json) rusak atau tidak terbaca. " +
-                    "Sistem akan menggunakan pengaturan standar dan mencoba memulihkan file.\n\n" +
-                    $"Detail Kesalahan: {ex.Message}",
-                    "Pemulihan Konfigurasi",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-
-                // 4. PEMULIHAN (SELF-HEALING)
-                // Inisialisasi cache kosong agar properti GetValue tidak error
-                _configCache = new JsonObject();
-
-                // Tulis ulang file yang rusak dengan yang baru/bersih
                 try
                 {
-                    string directoryName = Path.GetDirectoryName(ConfigPath);
-                    if (!string.IsNullOrEmpty(directoryName)) Directory.CreateDirectory(directoryName);
-                    File.WriteAllText(ConfigPath, _configCache.ToString());
+                    if (!Directory.Exists(ConfigFolder))
+                    {
+                        Directory.CreateDirectory(ConfigFolder);
+                    }
+
+                    if (!File.Exists(ConfigPath))
+                    {
+                        _configCache = new JsonObject();
+                        File.WriteAllText(ConfigPath, _configCache.ToString());
+                        return;
+                    }
+
+                    _configCache = JsonNode.Parse(File.ReadAllText(ConfigPath)) ?? new JsonObject();
                 }
-                catch { /* Abaikan jika terjadi masalah hak akses disk */ }
+                catch (Exception ex)
+                {
+                    // SOLUSI 2: Jangan panggil MessageBox di layer service! Lempar Exception terkontrol 
+                    // agar ditangkap oleh App.xaml.cs Global Exception Handler untuk ditampilkan ke UI
+                    _configCache = new JsonObject();
+
+                    try
+                    {
+                        File.WriteAllText(ConfigPath, _configCache.ToString());
+                    }
+                    catch { /* Abaikan jika disk gagal total */ }
+
+                    throw new InvalidOperationException($"Konfigurasi sistem (config.json) korup. Berhasil dipulihkan ke pengaturan awal. Detail: {ex.Message}");
+                }
             }
         }
 
-        // Properti ApiUrl dengan logika pengecekan nilai kosong
         public static string ApiUrl
         {
             get
             {
-                string url = GetValue("ApiUrl");
-                // Jika di JSON kosong, kembalikan DefaultApiUrl (localhost)
-                return string.IsNullOrWhiteSpace(url) ? DefaultApiUrl : url;
+                lock (LockObject) // Kunci thread saat membaca properti
+                {
+                    string url = GetValueInternal("ApiUrl");
+                    return string.IsNullOrWhiteSpace(url) ? DefaultApiUrl : url;
+                }
             }
         }
 
-        public static string GetValue(string key) => _configCache?[key]?.ToString() ?? string.Empty;
+        // Fungsi internal yang tidak memakai lock sendiri untuk menghindari risiko Deadlock
+        private static string GetValueInternal(string key) => _configCache?[key]?.ToString() ?? string.Empty;
+
+        public static string GetValue(string key)
+        {
+            lock (LockObject)
+            {
+                return GetValueInternal(key);
+            }
+        }
 
         public static string GetMappingValue(string key)
         {
-            // Ambil nilai dari bagian Mapping di JSON
-            string value = _configCache?["Mapping"]?[key]?.ToString();
-
-            // Jika nilai di JSON ada, gunakan itu
-            if (!string.IsNullOrWhiteSpace(value)) return value;
-
-            // JIKA KOSONG (KARENA FILE RUSAK): Gunakan kamus cadangan dari kode
-            return key switch
+            lock (LockObject)
             {
-                "NamaKey" => DefaultNamaKey,
-                "TglLahirKey" => DefaultTglLahirKey,
-                "GenderKey" => DefaultGenderKey,
-                "DoctorNameKey" => DefaultDoctorNameKey,
-                _ => string.Empty
-            };
+                string value = _configCache?["Mapping"]?[key]?.ToString();
+
+                if (!string.IsNullOrWhiteSpace(value)) return value;
+
+                return key switch
+                {
+                    "NamaKey" => DefaultNamaKey,
+                    "TglLahirKey" => DefaultTglLahirKey,
+                    "GenderKey" => DefaultGenderKey,
+                    "DoctorNameKey" => DefaultDoctorNameKey,
+                    _ => string.Empty
+                };
+            }
         }
 
         public static string HospitalName => GetValue("HospitalName");
@@ -104,29 +108,26 @@ namespace MedReport.Client.Services
 
         public static bool SaveTemplate(string hospitalName, string address, string logoPath)
         {
-            try
+            lock (LockObject) // Kunci thread saat memodifikasi cache dan menulis ke disk
             {
-                // Pastikan cache sudah terinisialisasi
-                if (_configCache == null) LoadConfig();
-
-                // Pastikan folder 'Configuration' ada sebelum menulis file
-                string directoryName = Path.GetDirectoryName(ConfigPath);
-                if (!string.IsNullOrEmpty(directoryName) && !Directory.Exists(directoryName))
+                try
                 {
-                    Directory.CreateDirectory(directoryName);
+                    if (!Directory.Exists(ConfigFolder))
+                    {
+                        Directory.CreateDirectory(ConfigFolder);
+                    }
+
+                    _configCache["HospitalName"] = hospitalName;
+                    _configCache["HospitalAddress"] = address;
+                    _configCache["HospitalLogoPath"] = logoPath;
+
+                    File.WriteAllText(ConfigPath, _configCache.ToString());
+                    return true;
                 }
-
-                _configCache["HospitalName"] = hospitalName;
-                _configCache["HospitalAddress"] = address;
-                _configCache["HospitalLogoPath"] = logoPath;
-
-                // Simpan perubahan ke file fisik
-                File.WriteAllText(ConfigPath, _configCache.ToString());
-                return true;
-            }
-            catch
-            {
-                return false;
+                catch
+                {
+                    return false;
+                }
             }
         }
     }
