@@ -3,9 +3,6 @@ using System.Text.Json.Serialization;
 
 namespace MedReport.Client.Models
 {
-    /// <summary>
-    /// Representasi standar Jenis Kelamin klinis untuk menjaga konsistensi format data antar-RS.
-    /// </summary>
     public enum GenderType
     {
         Unknown = 0,
@@ -13,41 +10,37 @@ namespace MedReport.Client.Models
         Perempuan = 2
     }
 
-    /// <summary>
-    /// Merepresentasikan model data pasien yang digunakan untuk berinteraksi dengan API Rumah Sakit (Telah Dioptimalkan).
-    /// </summary>
     public class PatientApiModel
     {
-        /// <summary>
-        /// KUNCI MULTI-TENANT: Mengisolasi data pasien agar tidak bocor atau tertukar antar rumah sakit.
-        /// </summary>
         public string HospitalId { get; set; } = string.Empty;
-
-        /// <summary>
-        /// Nomor rekam medis atau identitas unik pasien.
-        /// </summary>
         public string IdPasien { get; set; } = string.Empty;
-
-        /// <summary>
-        /// Nama lengkap pasien.
-        /// </summary>
         public string Nama { get; set; } = string.Empty;
 
         /// <summary>
-        /// DATA VITAL: Dibuat non-nullable karena wajib digunakan untuk kalkulasi klinis (misal: dosis obat).
+        /// Menggunakan string mentah dari API untuk menghindari crash parser akibat perbedaan format kultur regional (budaya komputer) di RS.
         /// </summary>
-        public DateTime TanggalLahir { get; set; } = DateTime.MinValue;
+        [JsonPropertyName("TanggalLahirRaw")]
+        public string RawTanggalLahir { get; set; } = string.Empty;
 
         /// <summary>
-        /// Format String mentah dari API luar (Mendukung fleksibilitas "L", "P", "Laki-laki").
-        /// Properti ini disembunyikan dari binding UI langsung.
+        /// Properti jembatan untuk kalkulasi medis klinis yang aman.
         /// </summary>
+        [JsonIgnore]
+        public DateTime TanggalLahir
+        {
+            get
+            {
+                if (DateTime.TryParse(RawTanggalLahir, out DateTime parsedDate))
+                {
+                    return parsedDate;
+                }
+                return DateTime.MinValue; // Mengembalikan ban serep jika format RS aneh
+            }
+        }
+
         [JsonPropertyName("Gender")]
         public string RawGender { get; set; } = string.Empty;
 
-        /// <summary>
-        /// NORMALISASI DATA: Properti internal aplikasi yang otomatis menerjemahkan data mentah API menjadi Enum yang konsisten.
-        /// </summary>
         [JsonIgnore]
         public GenderType NormalizedGender
         {
@@ -56,10 +49,12 @@ namespace MedReport.Client.Models
                 if (string.IsNullOrWhiteSpace(RawGender)) return GenderType.Unknown;
 
                 string cleanInput = RawGender.Trim().ToUpper();
-                if (cleanInput == "L" || cleanInput == "LAKI-LAKI" || cleanInput == "LAKILAKI" || cleanInput == "MALE")
+
+                // Ditambahkan toleransi angka standar kodefikasi rekam medis (1 = L, 2 = P)
+                if (cleanInput == "L" || cleanInput == "LAKI-LAKI" || cleanInput == "LAKILAKI" || cleanInput == "MALE" || cleanInput == "1")
                     return GenderType.LakiLaki;
 
-                if (cleanInput == "P" || cleanInput == "PEREMPUAN" || cleanInput == "FEMALE")
+                if (cleanInput == "P" || cleanInput == "PEREMPUAN" || cleanInput == "FEMALE" || cleanInput == "2")
                     return GenderType.Perempuan;
 
                 return GenderType.Unknown;
