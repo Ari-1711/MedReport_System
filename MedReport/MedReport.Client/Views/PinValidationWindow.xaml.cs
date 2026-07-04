@@ -1,5 +1,8 @@
-﻿using System.Windows;
+﻿using System;
+using System.Security;
+using System.Windows;
 using System.Windows.Input;
+using MedReport.Client.Services;
 
 namespace MedReport.Client.Views
 {
@@ -15,10 +18,17 @@ namespace MedReport.Client.Views
 
         private void BtnVerify_Click(object sender, RoutedEventArgs e)
         {
-            // Proteksi PIN Statis Khusus Tim IT Rumah Sakit
-            const string PinItRs = "2026";
+            // Ambil SecureString langsung dari password box
+            SecureString securePin = PbPin.SecurePassword;
 
-            if (PbPin.Password == PinItRs)
+            if (securePin == null || securePin.Length == 0)
+            {
+                ShowAccessDenied();
+                return;
+            }
+
+            // PERBAIKAN: Panggil langsung lewat nama Kelas Statis, bukan lewat objek variabel
+            if (ConfigService.ValidateItPin(securePin))
             {
                 IsAuthenticated = true;
                 DialogResult = true;
@@ -26,14 +36,20 @@ namespace MedReport.Client.Views
             }
             else
             {
-                MessageBox.Show(
-                    "PIN Otorisasi Salah! Akses modifikasi konfigurasi jaringan ditolak.",
-                    "Akses Ditolak",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Stop);
-                PbPin.Clear();
-                PbPin.Focus();
+                ShowAccessDenied();
             }
+        }
+
+        private void ShowAccessDenied()
+        {
+            MessageBox.Show(
+                "PIN Otorisasi Salah! Akses modifikasi konfigurasi jaringan ditolak.",
+                "Akses Ditolak",
+                MessageBoxButton.OK,
+                MessageBoxImage.Stop);
+
+            PbPin.Clear();
+            PbPin.Focus();
         }
 
         private void BtnCancel_Click(object sender, RoutedEventArgs e)
