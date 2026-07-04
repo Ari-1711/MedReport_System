@@ -89,7 +89,21 @@ namespace MedReport.Client
         {
             string name = FormPasien.TxtRs.Text.Trim();
             string address = FormPasien.TxtAlamatRs.Text.Trim();
-            if (ConfigService.SaveTemplate(name, address, _hospitalLogoPath ?? ""))
+
+            // Panggil fungsi yang benar dan teruskan nilai API/Mapping yang sudah ada di cache
+            bool isSuccess = ConfigService.SaveFullConfiguration(
+                name,
+                address,
+                _hospitalLogoPath ?? "",
+                ConfigService.ApiUrl,
+                ConfigService.DoctorApiUrl,
+                ConfigService.GetMappingValue("NamaKey"),
+                ConfigService.GetMappingValue("TglLahirKey"),
+                ConfigService.GetMappingValue("GenderKey"),
+                ConfigService.GetMappingValue("DoctorNameKey")
+            );
+
+            if (isSuccess)
                 MessageBox.Show("Template Rumah Sakit berhasil disimpan!", "Sukses", MessageBoxButton.OK, MessageBoxImage.Information);
             else
                 MessageBox.Show("Gagal menyimpan template.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -115,21 +129,38 @@ namespace MedReport.Client
                 string newDoctorApi = Microsoft.VisualBasic.Interaction.InputBox("Masukkan URL Server API Master Daftar Dokter yang baru:", "Konfigurasi API Dokter", currentDoctorApi);
                 if (string.IsNullOrEmpty(newDoctorApi)) return;
 
-                // SOLUSI EROR 2: Amankan runtime instance pemanggilan SaveTemplate dari data null pointer
+                // Ganti blok try di dalam BtnNetworkSetting_Click (Mulai baris 121) menjadi seperti ini:
                 try
                 {
                     string hospitalName = ConfigService.HospitalName ?? string.Empty;
                     string hospitalAddress = ConfigService.HospitalAddress ?? string.Empty;
 
-                    // Tulis ulang struktur data lama dengan menyisipkan alamat API modifikasi baru
-                    ConfigService.SaveTemplate(hospitalName, hospitalAddress, _hospitalLogoPath);
+                    // Tulis ulang konfigurasi dengan menyisipkan alamat API modifikasi baru dari IT
+                    bool isSuccess = ConfigService.SaveFullConfiguration(
+                        hospitalName,
+                        hospitalAddress,
+                        _hospitalLogoPath,
+                        newPatientApi,     // API Baru Pasien
+                        newDoctorApi,      // API Baru Dokter
+                        ConfigService.GetMappingValue("NamaKey"),
+                        ConfigService.GetMappingValue("TglLahirKey"),
+                        ConfigService.GetMappingValue("GenderKey"),
+                        ConfigService.GetMappingValue("DoctorNameKey")
+                    );
 
-                    MessageBox.Show(
-                        "Konfigurasi alamat Jaringan Server RS Berhasil Diperbarui!\n\n" +
-                        "Sistem mendeteksi pembaruan endpoint baru. Harap restart aplikasi.",
-                        "Sukses Terkonfigurasi",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Information);
+                    if (isSuccess)
+                    {
+                        MessageBox.Show(
+                            "Konfigurasi alamat Jaringan Server RS Berhasil Diperbarui!\n\n" +
+                            "Sistem mendeteksi pembaruan endpoint baru. Harap restart aplikasi.",
+                            "Sukses Terkonfigurasi",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Information);
+                    }
+                    else
+                    {
+                        MessageBox.Show("Gagal memperbarui konfigurasi jaringan.", "Sistem Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
                 }
                 catch (Exception ex)
                 {
