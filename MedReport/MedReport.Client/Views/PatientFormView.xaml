@@ -25,26 +25,31 @@
         <StackPanel Grid.Row="0" Grid.Column="0" Margin="5">
             <TextBlock Text="ID Pasien:"/>
             <TextBox x:Name="TxtIdPasien" 
-             KeyDown="TxtIdPasien_KeyDown"
-             DataObject.Pasting="IdTextBoxPasting"/>
+                     Text="{Binding SearchIdInput, UpdateSourceTrigger=PropertyChanged}"
+                     KeyDown="TxtIdPasien_KeyDown"
+                     DataObject.Pasting="IdTextBoxPasting"/>
         </StackPanel>
 
         <StackPanel Grid.Row="0" Grid.Column="1" Margin="5">
             <TextBlock Text="Nama Pasien:"/>
             <TextBox x:Name="TxtNama" 
-             PreviewTextInput="NameValidationTextBox" 
-             DataObject.Pasting="NameTextBoxPasting" />
+                     Text="{Binding PatientData.Nama, Mode=TwoWay}"
+                     PreviewTextInput="NameValidationTextBox" 
+                     DataObject.Pasting="NameTextBoxPasting" />
         </StackPanel>
 
         <StackPanel Grid.Row="0" Grid.Column="2" Margin="5">
             <TextBlock Text="Tanggal Lahir:"/>
             <DatePicker x:Name="DpTanggalLahir" 
-                DisplayDateEnd="{x:Static System:DateTime.Today}"/>
+                        SelectedDate="{Binding PatientData.TanggalLahir, Mode=OneWay}"
+                        DisplayDateEnd="{x:Static System:DateTime.Today}"/>
         </StackPanel>
 
         <StackPanel Grid.Row="1" Grid.Column="0" Margin="5">
             <TextBlock Text="Jenis Kelamin:"/>
-            <ComboBox x:Name="CmbGender" SelectedIndex="0">
+            <!-- Menghubungkan indeks pilihan langsung ke penangan cerdas ViewModel -->
+            <ComboBox x:Name="CmbGender" 
+                      SelectedIndex="{Binding SelectedGenderIndex, Mode=TwoWay}">
                 <ComboBoxItem Content="- Pilih Jenis Kelamin -" IsEnabled="False"/>
                 <ComboBoxItem Content="Laki-laki"/>
                 <ComboBoxItem Content="Perempuan"/>
@@ -53,22 +58,28 @@
 
         <StackPanel Grid.Row="1" Grid.Column="1" Margin="5">
             <TextBlock Text="Dokter Pemeriksa:"/>
-            <ComboBox x:Name="CmbDokter" SelectedIndex="0" />
+            <!-- Mengambil data list dari ViewModel secara dinamis -->
+            <ComboBox x:Name="CmbDokter" 
+                      ItemsSource="{Binding DaftarDokter}" 
+                      SelectedItem="{Binding SelectedDokter, Mode=TwoWay}" />
         </StackPanel>
 
         <StackPanel Grid.Row="1" Grid.Column="2" Margin="5">
             <TextBlock Text="Nama Rumah Sakit:"/>
-            <TextBox x:Name="TxtRs" />
+            <TextBox x:Name="TxtRs" 
+                     Text="{Binding HospitalName, Mode=OneWay}" IsReadOnly="True"/>
         </StackPanel>
 
         <StackPanel Grid.Row="2" Grid.ColumnSpan="3" Margin="5">
             <TextBlock Text="Alamat Rumah Sakit:"/>
-            <TextBox x:Name="TxtAlamatRs" />
+            <TextBox x:Name="TxtAlamatRs"
+                     Text="{Binding HospitalAddress, Mode=OneWay}" IsReadOnly="True"/>
         </StackPanel>
 
         <StackPanel Grid.Row="3" Grid.ColumnSpan="3" Margin="5">
             <TextBlock Text="Keluhan:"/>
             <TextBox x:Name="TxtKeluhan" MinHeight="60" MaxHeight="120" 
+                     Text="{Binding Keluhan, UpdateSourceTrigger=PropertyChanged}"
                      TextWrapping="Wrap" AcceptsReturn="True" 
                      VerticalScrollBarVisibility="Auto" MaxLength="500"/>
             <TextBlock Text="{Binding ElementName=TxtKeluhan, Path=Text.Length, StringFormat='{}{0}/500', FallbackValue='0/500'}" 
@@ -77,7 +88,8 @@
 
         <StackPanel Grid.Row="4" Grid.ColumnSpan="3" Margin="5">
             <TextBlock Text="Diagnosis:"/>
-            <TextBox x:Name="TxtDiagnosis" MinHeight="60" MaxHeight="120" 
+            <TextBox x:Name="TxtDiagnosis" MinHeight="60" MaxHeight="120"
+                     Text="{Binding Diagnosis, UpdateSourceTrigger=PropertyChanged}"
                      TextWrapping="Wrap" AcceptsReturn="True" 
                      VerticalScrollBarVisibility="Auto" MaxLength="500"/>
             <TextBlock Text="{Binding ElementName=TxtDiagnosis, Path=Text.Length, StringFormat='{}{0}/500', FallbackValue='0/500'}" 
@@ -87,6 +99,7 @@
         <StackPanel Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="2" Margin="5">
             <TextBlock Text="Obat Premedikasi:"/>
             <TextBox x:Name="TxtObatPremedikasi" MinHeight="40" MaxHeight="100" 
+                     Text="{Binding ObatPremedikasi, UpdateSourceTrigger=PropertyChanged}"
                      TextWrapping="Wrap" AcceptsReturn="True" 
                      VerticalScrollBarVisibility="Auto" MaxLength="300"/>
             <TextBlock Text="{Binding ElementName=TxtObatPremedikasi, Path=Text.Length, StringFormat='{}{0}/300', FallbackValue='0/300'}" 
@@ -96,6 +109,7 @@
         <StackPanel Grid.Row="5" Grid.Column="2" Margin="5">
             <TextBlock Text="Alat:"/>
             <TextBox x:Name="TxtAlat" MinHeight="40" MaxHeight="100"
+                     Text="{Binding Alat, UpdateSourceTrigger=PropertyChanged}"
                      TextWrapping="Wrap" AcceptsReturn="True"
                      MaxLength="300" VerticalScrollBarVisibility="Auto"/>
             <TextBlock Text="{Binding ElementName=TxtAlat, Path=Text.Length, StringFormat='{}{0}/300', FallbackValue='0/300'}" 

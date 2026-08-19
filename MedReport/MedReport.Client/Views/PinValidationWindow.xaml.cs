@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Security;
 using System.Windows;
-using System.Windows.Input;
 using MedReport.Client.Services;
 
 namespace MedReport.Client.Views
@@ -27,7 +26,7 @@ namespace MedReport.Client.Views
                 return;
             }
 
-            // PERBAIKAN: Panggil langsung lewat nama Kelas Statis, bukan lewat objek variabel
+            // Validasi PIN lewat kelas statis (Aman dari memory dumping)
             if (ConfigService.ValidateItPin(securePin))
             {
                 IsAuthenticated = true;
@@ -58,12 +57,7 @@ namespace MedReport.Client.Views
             Close();
         }
 
-        private void PbPin_KeyDown(object sender, KeyEventArgs e)
-        {
-            if (e.Key == Key.Enter)
-            {
-                BtnVerify_Click(this, new RoutedEventArgs());
-            }
-        }
+        // Catatan: Method PbPin_KeyDown telah dihapus karena fungsinya sudah diambil alih 
+        // secara native dan efisien oleh properti IsDefault="True" di file .xaml lu.
     }
 }

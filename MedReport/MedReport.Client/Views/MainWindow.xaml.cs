@@ -110,7 +110,7 @@ namespace MedReport.Client
         }
 
         // =========================================================================
-        // FITUR BARU: MANAGEMENT CONFIGURATION JARINGAN IT (TERPROTEKSI PIN)
+        // MANAGEMENT CONFIGURATION IT RS - 4 MENU SPESIFIK & AMAN
         // =========================================================================
         private void BtnNetworkSetting_Click(object sender, RoutedEventArgs e)
         {
@@ -119,52 +119,153 @@ namespace MedReport.Client
 
             if (pinWindow.ShowDialog() == true && pinWindow.IsAuthenticated)
             {
+                // Tampilan Menu Utama IT yang Terstruktur dan Profesional
+                string menuPrompt = "SISTEM KONFIGURASI SIMRS - MEDREPORT\n\n" +
+                                    "Silahkan pilih nomor menu untuk melakukan pembaruan:\n" +
+                                    "[1] Perbarui Identitas Rumah Sakit (Nama & Alamat)\n" +
+                                    "[2] Perbarui Endpoint Server Jaringan (URL Server API)\n" +
+                                    "[3] Perbarui Pemetaan Kolom Data (Dynamic Mapping JSON)\n" +
+                                    "[4] Ubah PIN Otorisasi Keamanan IT";
+
+                string pilihanMenu = Microsoft.VisualBasic.Interaction.InputBox(menuPrompt, "Menu Utama Teknisi IT RS", "1");
+                if (string.IsNullOrWhiteSpace(pilihanMenu)) return; // Batal jika kosong
+
+                // Ambil data dari cache saat ini sebagai nilai default (Anti-Loss Data)
+                string currentHospitalName = ConfigService.HospitalName;
+                string currentHospitalAddress = ConfigService.HospitalAddress;
                 string currentPatientApi = ConfigService.ApiUrl;
                 string currentDoctorApi = ConfigService.GetValue("DoctorApiUrl");
                 if (string.IsNullOrWhiteSpace(currentDoctorApi)) currentDoctorApi = "http://localhost:3000/dokter";
 
-                string newPatientApi = Microsoft.VisualBasic.Interaction.InputBox("Masukkan URL Server API Rekam Medis Pasien yang baru:", "Konfigurasi API Pasien", currentPatientApi);
-                if (string.IsNullOrEmpty(newPatientApi)) return;
+                string currentNamaKey = ConfigService.GetMappingValue("NamaKey");
+                string currentTglLahirKey = ConfigService.GetMappingValue("TglLahirKey");
+                string currentGenderKey = ConfigService.GetMappingValue("GenderKey");
+                string currentDoctorNameKey = ConfigService.GetMappingValue("DoctorNameKey");
 
-                string newDoctorApi = Microsoft.VisualBasic.Interaction.InputBox("Masukkan URL Server API Master Daftar Dokter yang baru:", "Konfigurasi API Dokter", currentDoctorApi);
-                if (string.IsNullOrEmpty(newDoctorApi)) return;
+                bool isConfigChanged = false;
 
-                // Ganti blok try di dalam BtnNetworkSetting_Click (Mulai baris 121) menjadi seperti ini:
-                try
+                if (pilihanMenu == "1")
                 {
-                    string hospitalName = ConfigService.HospitalName ?? string.Empty;
-                    string hospitalAddress = ConfigService.HospitalAddress ?? string.Empty;
+                    // ==========================================
+                    // MENU 1: IDENTITAS RUMAH SAKIT
+                    // ==========================================
+                    string newHospitalName = Microsoft.VisualBasic.Interaction.InputBox("Masukkan Nama Resmi Rumah Sakit:", "Perbarui Identitas RS", currentHospitalName);
+                    if (string.IsNullOrEmpty(newHospitalName)) return;
 
-                    // Tulis ulang konfigurasi dengan menyisipkan alamat API modifikasi baru dari IT
-                    bool isSuccess = ConfigService.SaveFullConfiguration(
-                        hospitalName,
-                        hospitalAddress,
-                        _hospitalLogoPath,
-                        newPatientApi,     // API Baru Pasien
-                        newDoctorApi,      // API Baru Dokter
-                        ConfigService.GetMappingValue("NamaKey"),
-                        ConfigService.GetMappingValue("TglLahirKey"),
-                        ConfigService.GetMappingValue("GenderKey"),
-                        ConfigService.GetMappingValue("DoctorNameKey")
-                    );
+                    string newHospitalAddress = Microsoft.VisualBasic.Interaction.InputBox("Masukkan Alamat Lengkap Rumah Sakit:", "Perbarui Identitas RS", currentHospitalAddress);
+                    if (string.IsNullOrEmpty(newHospitalAddress)) return;
 
-                    if (isSuccess)
-                    {
-                        MessageBox.Show(
-                            "Konfigurasi alamat Jaringan Server RS Berhasil Diperbarui!\n\n" +
-                            "Sistem mendeteksi pembaruan endpoint baru. Harap restart aplikasi.",
-                            "Sukses Terkonfigurasi",
-                            MessageBoxButton.OK,
-                            MessageBoxImage.Information);
-                    }
-                    else
-                    {
-                        MessageBox.Show("Gagal memperbarui konfigurasi jaringan.", "Sistem Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                    }
+                    currentHospitalName = newHospitalName;
+                    currentHospitalAddress = newHospitalAddress;
+                    isConfigChanged = true;
                 }
-                catch (Exception ex)
+                else if (pilihanMenu == "2")
                 {
-                    MessageBox.Show($"Gagal menyimpan konfigurasi jaringan baru: {ex.Message}", "Sistem Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    // ==========================================
+                    // MENU 2: ENDPOINT SERVER JARINGAN
+                    // ==========================================
+                    string newPatientApi = Microsoft.VisualBasic.Interaction.InputBox("Masukkan URL Integrasi Data Rekam Medis Pasien:", "Perbarui Endpoint Jaringan", currentPatientApi);
+                    if (string.IsNullOrEmpty(newPatientApi)) return;
+
+                    string newDoctorApi = Microsoft.VisualBasic.Interaction.InputBox("Masukkan URL Sinkronisasi Data Master Dokter:", "Perbarui Endpoint Jaringan", currentDoctorApi);
+                    if (string.IsNullOrEmpty(newDoctorApi)) return;
+
+                    currentPatientApi = newPatientApi;
+                    currentDoctorApi = newDoctorApi;
+                    isConfigChanged = true;
+                }
+                else if (pilihanMenu == "3")
+                {
+                    // ==========================================
+                    // MENU 3: DYNAMIC MAPPING DATA SIMRS
+                    // ==========================================
+                    string newNamaKey = Microsoft.VisualBasic.Interaction.InputBox("Key Objek JSON untuk Nama Pasien:", "Perbarui Pemetaan Kolom Data", currentNamaKey);
+                    if (string.IsNullOrEmpty(newNamaKey)) return;
+
+                    string newTglLahirKey = Microsoft.VisualBasic.Interaction.InputBox("Key Objek JSON untuk Tanggal Lahir Pasien:", "Perbarui Pemetaan Kolom Data", currentTglLahirKey);
+                    if (string.IsNullOrEmpty(newTglLahirKey)) return;
+
+                    string newGenderKey = Microsoft.VisualBasic.Interaction.InputBox("Key Objek JSON untuk Jenis Kelamin Pasien:", "Perbarui Pemetaan Kolom Data", currentGenderKey);
+                    if (string.IsNullOrEmpty(newGenderKey)) return;
+
+                    string newDoctorNameKey = Microsoft.VisualBasic.Interaction.InputBox("Key Objek JSON untuk Nama Lengkap Dokter:", "Perbarui Pemetaan Kolom Data", currentDoctorNameKey);
+                    if (string.IsNullOrEmpty(newDoctorNameKey)) return;
+
+                    currentNamaKey = newNamaKey;
+                    currentTglLahirKey = newTglLahirKey;
+                    currentGenderKey = newGenderKey;
+                    currentDoctorNameKey = newDoctorNameKey;
+                    isConfigChanged = true;
+                }
+                else if (pilihanMenu == "4")
+                {
+                    // ==========================================
+                    // MENU 4: UBAH PIN KEAMANAN IT
+                    // ==========================================
+                    string inputPin1 = Microsoft.VisualBasic.Interaction.InputBox("Masukkan PIN Baru Otorisasi IT (Hanya Angka):", "Ubah Akses PIN Keamanan", "");
+                    if (string.IsNullOrWhiteSpace(inputPin1)) return;
+
+                    string inputPin2 = Microsoft.VisualBasic.Interaction.InputBox("Konfirmasi Ulang PIN Baru Anda:", "Ubah Akses PIN Keamanan", "");
+
+                    if (inputPin1 != inputPin2)
+                    {
+                        MessageBox.Show("Validasi Gagal! PIN Baru dan Konfirmasi tidak cocok.", "Error Akses", MessageBoxButton.OK, MessageBoxImage.Stop);
+                        return;
+                    }
+
+                    using (System.Security.SecureString secureNewPin = new System.Security.SecureString())
+                    {
+                        foreach (char c in inputPin1) secureNewPin.AppendChar(c);
+                        secureNewPin.MakeReadOnly();
+
+                        if (ConfigService.ChangeItPin(secureNewPin))
+                        {
+                            MessageBox.Show("PIN Keamanan Akses IT Berhasil Diperbarui!", "Sukses", MessageBoxButton.OK, MessageBoxImage.Information);
+                        }
+                        else
+                        {
+                            MessageBox.Show("Gagal mengamankan berkas enkripsi PIN baru ke disk.", "Sistem Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                        }
+                    }
+                    return; // Keluar fungsi karena PIN terpisah dari berkas SaveFullConfiguration umum
+                }
+                else
+                {
+                    MessageBox.Show("Pilihan menu tidak valid.", "Peringatan", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                // EKSEKUSI PENYIMPANAN DATA (Jika terjadi perubahan pada Menu 1, 2, atau 3)
+                if (isConfigChanged)
+                {
+                    try
+                    {
+                        bool isSuccess = ConfigService.SaveFullConfiguration(
+                            currentHospitalName, currentHospitalAddress, _hospitalLogoPath,
+                            currentPatientApi, currentDoctorApi,
+                            currentNamaKey, currentTglLahirKey, currentGenderKey, currentDoctorNameKey
+                        );
+
+                        if (isSuccess)
+                        {
+                            MessageBox.Show("Pembaruan Konfigurasi SIMRS Berhasil Disimpan!", "Sukses Terkonfigurasi", MessageBoxButton.OK, MessageBoxImage.Information);
+
+                            // Sinkronisasi Reaktif ke UI Suster melalui ViewModel
+                            if (FormPasien.DataContext is ViewModels.PatientFormViewModel patientVm)
+                            {
+                                patientVm.RefreshHospitalData();
+                                _ = patientVm.MuatDaftarDokterAsync(); // Tarik ulang master dokter di background jika server dirubah
+                            }
+                        }
+                        else
+                        {
+                            MessageBox.Show("Gagal menulis pembaruan konfigurasi ke disk lokal terenkripsi.", "Sistem Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Terjadi kegagalan sistem saat menyimpan konfigurasi: {ex.Message}", "Sistem Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
                 }
             }
         }
